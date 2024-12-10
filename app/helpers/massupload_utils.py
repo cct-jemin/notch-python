@@ -20,7 +20,50 @@ async def sheetWiseValidation(filePath):
         df = df.fillna(value='')
         sheetData = df.values.tolist()
         
+        #for now take data from config file
+        scope = sheetInfo['scope']
+        category = sheetInfo['category']
         
+        sheetWiseData['sheets'][sheetName.lower()] = {"scope" : scope, "category" : category, "data" : [], "sectionPointer" : '', "validationStr" : ''}
+        
+        section_pointer_name = None
+        first_cell_value = lower_case(sheetData[0][0])
+        
+        #first row column validation
+        if not category and first_cell_value != "company information":
+            sheetWiseData['sheets'][sheetName.lower()]['validationStr'] += (
+                f"<li>Row - 1 : Invalid name. It should be Company Information.</li>"
+            )
+        elif not category and first_cell_value == "company information":
+            section_pointer_name = first_cell_value
+        elif category and first_cell_value == "category":
+            section_pointer_name = lower_case(sheetData[1][0]) if len(sheetData) > 1 else None
+        else:
+            sheetWiseData['sheets'][sheetName.lower()]['validationStr'] += (
+                f"<li>Row - 1 : Invalid {sheetData[0][0]}. It should be Category.</li>"
+            )
+        print(section_pointer_name)    
+        sheetWiseData['sheets'][sheetName.lower()]['data'] = sheetData
+        
+    validation_obj = []
+    if not sheetWiseData.get("sheets", {}):  # Check if the "sheets" dictionary is empty
+        validation_obj.append({
+            "sheetName": "No Sheets",
+            "validation": ["Please upload valid sheet"]
+        })
+        
+    for sheet_name, sheet_data in sheetWiseData.get("sheets", {}).items():
+        validation_str = sheet_data.get("validationStr", "").strip()
+        if validation_str:
+            # Extract content between <li> and </li> tags
+            matches = re.findall(r"<li>(.*?)<\/li>", validation_str)
+            # Remove any extra whitespace and filter out empty values
+            html_array = [match.strip() for match in matches if match.strip()]
+            validation_obj.append({"sheetName": sheet_name, "validation": html_array})
+            
+    if validation_obj :
+        return {"isAllSheetValid":False,"validationObj": validation_obj}
+    else :
         return {"isAllSheetValid":True,"sheetWiseData" : sheetWiseData['sheets']}
 
 def lower_case(value: str) -> str:
