@@ -4,9 +4,12 @@ import logging
 import pandas as pd
 from app.schemas import massupload_validation_schema
 import re
+import time
 
 async def sheetWiseValidation(filePath):
     print("validation function call")
+    start_time = time.time()
+    print(f"validation start time {start_time:.2f}")
     excel_data = pd.ExcelFile(filePath, engine='openpyxl')
     sheetNamesAarry = excel_data.sheet_names
     sheetWiseData = {'sheets' : {}, 'validationStr' : ''}
@@ -44,6 +47,8 @@ async def sheetWiseValidation(filePath):
             )
         print(section_pointer_name)    
         sheetWiseData['sheets'][sheetName.lower()]['data'] = sheetData
+        
+    print(f"Finished validation time:{time.time():.2f}, duration: {time.time() - start_time:.2f} seconds")
         
     validation_obj = []
     if not sheetWiseData.get("sheets", {}):  # Check if the "sheets" dictionary is empty
