@@ -1,2 +1,16 @@
 2024-11-25 13:47:54,059 - ERROR - Unsupported file type.upload only xlsx file
 2024-11-25 13:50:44,458 - ERROR - Unsupported file type.upload only xlsx file
+2024-11-25 18:43:35,275 - ERROR - Unsupported file type.upload only xlsx file
+2024-11-25 18:47:43,006 - ERROR - Unsupported file type.upload only xlsx file
+2024-11-25 18:47:55,008 - ERROR - Unsupported file type.upload only xlsx file
+2024-11-25 19:08:56,128 - ERROR - Unsupported file type.upload only xlsx file
+2024-11-26 11:41:36,128 - ERROR - Missing optional dependency 'openpyxl'.  Use pip or conda to install openpyxl.
+2024-11-26 12:40:24,353 - ERROR - 400: Invalid sheet names: Sheet1, Sheet2
+2024-11-26 12:40:56,689 - ERROR - 400: Invalid sheet names: Companyaa, Scope 1 - category 2, Scope 2 - category 1, Scope 2 - category 2
+2024-11-26 12:42:19,895 - ERROR - 400: Invalid sheet names: Companyaa
+2024-11-26 13:44:14,841 - ERROR - 0
+2024-12-02 12:35:19,797 - ERROR - Must specify a fill 'value' or 'method'.
+2024-12-03 11:56:40,256 - ERROR - list indices must be integers or slices, not str
+2024-12-03 13:26:54,694 - ERROR - 'data'
+2024-12-03 17:21:10,023 - ERROR - Unsupported file type.upload only xlsx file
+2024-12-11 11:31:15,438 - ERROR - 'coroutine' object is not subscriptable
