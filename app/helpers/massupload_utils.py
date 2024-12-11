@@ -6,6 +6,9 @@ from app.schemas import massupload_validation_schema
 import re
 import asyncio
 import time
+from concurrent.futures import ThreadPoolExecutor
+
+executor = ThreadPoolExecutor()
 
 async def sheetWiseValidation(filePath):
     excel_data = pd.ExcelFile(filePath, engine='openpyxl')
@@ -20,7 +23,7 @@ async def sheetWiseValidation(filePath):
         df = excel_data.parse(sheetName,header=None)
         df = df.fillna(value='')
         sheetData = df.values.tolist()
-        tasks.append(validate_and_insert(sheetName, sheetData,sheetWiseData))
+        tasks.append(validate_sheet(sheetName, sheetData,sheetWiseData))
         
     # Execute all tasks concurrently
     await asyncio.gather(*tasks)
@@ -50,7 +53,12 @@ def lower_case(value: str) -> str:
     """Convert a string to lowercase and strip whitespace."""
     return re.sub(r'\s+', ' ', value.strip().lower())
 
-async def validate_and_insert(sheetName, sheetData,sheetWiseData):
+async def validate_sheet(sheetName, sheetData,sheetWiseData):
+    await asyncio.to_thread(sync_validate,sheetName,sheetData,sheetWiseData)
+   
+    
+    
+def sync_validate(sheetName, sheetData, sheetWiseData):
     start_time = time.time()
     print(f"Start processing sheet: {sheetName} at {start_time:.2f}")
     sheetInfo = massupload_validation_schema.massUploadValidationSchema["sheetMapping"][sheetName.lower()]
@@ -76,7 +84,5 @@ async def validate_and_insert(sheetName, sheetData,sheetWiseData):
         sheetWiseData['sheets'][sheetName.lower()]['validationStr'] += (
             f"<li>Row - 1 : Invalid {sheetData[0][0]}. It should be Category.</li>"
         )
-    print(section_pointer_name)    
     sheetWiseData['sheets'][sheetName.lower()]['data'] = sheetData
-    await asyncio.sleep(0.1)
     print(f"Finished processing sheet: {sheetName} at {time.time():.2f}, duration: {time.time() - start_time:.2f} seconds")
