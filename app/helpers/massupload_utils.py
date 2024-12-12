@@ -7,6 +7,7 @@ import re
 import asyncio
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 
 executor = ThreadPoolExecutor()
 
@@ -14,6 +15,8 @@ async def sheetWiseValidation(filePath):
     excel_data = pd.ExcelFile(filePath, engine='openpyxl')
     sheetNamesAarry = excel_data.sheet_names
     sheetWiseData = {'sheets' : {}, 'validationStr' : ''}
+    start_time = datetime.now()
+    print(f"Start Time: {start_time.isoformat()}")
     tasks = []
     for sheetName in sheetNamesAarry:
         
@@ -27,6 +30,10 @@ async def sheetWiseValidation(filePath):
         
     # Execute all tasks concurrently
     await asyncio.gather(*tasks)
+    end_time = datetime.now()
+    duration = (end_time - start_time).total_seconds()
+    print(f"End Time: {end_time.isoformat()}")
+    print(f"Duration: {duration:.2f} seconds")
         
     validation_obj = []
     if not sheetWiseData.get("sheets", {}):  # Check if the "sheets" dictionary is empty
@@ -47,7 +54,7 @@ async def sheetWiseValidation(filePath):
     if validation_obj :
         return {"isAllSheetValid":False,"validationObj": validation_obj}
     else :
-        return {"isAllSheetValid":True,"sheetWiseData" : sheetWiseData['sheets']}
+        return {"isAllSheetValid":True}
 
 def lower_case(value: str) -> str:
     """Convert a string to lowercase and strip whitespace."""
@@ -59,21 +66,21 @@ async def validate_sheet(sheetName, sheetData,sheetWiseData):
     
     
 def sync_validate(sheetName, sheetData, sheetWiseData):
-    start_time = time.time()
-    print(f"Start processing sheet: {sheetName} at {start_time:.2f}")
+    # start_time = time.time()
+    # print(f"Start processing sheet: {sheetName} at {start_time:.2f}")
     sheetInfo = massupload_validation_schema.massUploadValidationSchema["sheetMapping"][sheetName.lower()]
    #for now take data from config file
     scope = sheetInfo['scope']
     category = sheetInfo['category']
     
-    sheetWiseData['sheets'][sheetName.lower()] = {"scope" : scope, "category" : category, "data" : [], "sectionPointer" : '', "validationStr" : ''}
+    sheetWiseData['sheets'][sheetName] = {"scope" : scope, "category" : category, "data" : [], "sectionPointer" : '', "validationStr" : ''}
     
     section_pointer_name = None
     first_cell_value = lower_case(sheetData[0][0])
     
     #first row column validation
     if not category and first_cell_value != "company information":
-        sheetWiseData['sheets'][sheetName.lower()]['validationStr'] += (
+        sheetWiseData['sheets'][sheetName]['validationStr'] += (
             f"<li>Row - 1 : Invalid name. It should be Company Information.</li>"
         )
     elif not category and first_cell_value == "company information":
@@ -81,8 +88,8 @@ def sync_validate(sheetName, sheetData, sheetWiseData):
     elif category and first_cell_value == "category":
         section_pointer_name = lower_case(sheetData[1][0]) if len(sheetData) > 1 else None
     else:
-        sheetWiseData['sheets'][sheetName.lower()]['validationStr'] += (
+        sheetWiseData['sheets'][sheetName]['validationStr'] += (
             f"<li>Row - 1 : Invalid {sheetData[0][0]}. It should be Category.</li>"
         )
-    sheetWiseData['sheets'][sheetName.lower()]['data'] = sheetData
-    print(f"Finished processing sheet: {sheetName} at {time.time():.2f}, duration: {time.time() - start_time:.2f} seconds")
+    # sheetWiseData['sheets'][sheetName]['data'] = sheetData
+    # print(f"Finished processing sheet: {sheetName} at {time.time():.2f}, duration: {time.time() - start_time:.2f} seconds")
