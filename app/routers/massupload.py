@@ -27,11 +27,12 @@ async def sheet_wise_mass_upload(file:UploadFile = File(...)):
         if not os.path.exists(uploadpath):
             os.makedirs(uploadpath)
             
-        filePath = os.path.join(uploadpath, file.filename)
-        with open(filePath,'wb') as buffer:
+        requestParam = {}
+        requestParam['filePath'] = os.path.join(uploadpath, file.filename)
+        with open(requestParam['filePath'],'wb') as buffer:
           buffer.write(await file.read())  
           
-        response = await massupload_utils.sheetWiseValidation(filePath)
+        response = await massupload_utils.sheetWiseValidation(requestParam)
         
         # print(f"Finished task:{time.time():.2f}, duration: {time.time() - start_time:.2f} seconds")
         if response['isAllSheetValid'] :
