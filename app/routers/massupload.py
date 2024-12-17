@@ -7,7 +7,7 @@ import time
 
 router = APIRouter()
 
-@router.post("/v2/carbon_data/sheet_wise_mass_upload")
+@router.post("/")
 async def sheet_wise_mass_upload(file:UploadFile = File(...)):
     # start_time = time.time()
     # print(f"Task start time {start_time:.2f}")
@@ -36,7 +36,7 @@ async def sheet_wise_mass_upload(file:UploadFile = File(...)):
         
         # print(f"Finished task:{time.time():.2f}, duration: {time.time() - start_time:.2f} seconds")
         if response['isAllSheetValid'] :
-            return {"message":"file uploaded successfully","sheetdata":response['sheetWiseData']}
+            return {"message":"file uploaded successfully","validationObj":response['validationObj']}
         else :
             return response
     

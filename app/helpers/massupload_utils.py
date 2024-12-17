@@ -67,7 +67,8 @@ async def sheetWiseValidation(requestParam):
     if validation_obj :
         return {"isAllSheetValid":False,"validationObj": validation_obj}
     else :
-        return {"isAllSheetValid":True,"sheetWiseData" : sheetWiseData['sheets']}
+        # print(f"""{sheetWiseData['sheets']}""")
+        return {"isAllSheetValid":True,"validationObj": validation_obj}
 
 
 async def validate_sheet(requestParam,sheetName, sheetData,sheetWiseData):
@@ -99,6 +100,7 @@ def sync_validate(requestParam,sheetName, sheetData, sheetWiseData):
         for sectionPointer in sheetInfo['sectionPointer']
         if sectionPointer in sectionNameMappingReverse
     ]
+    headerRow = []
     for i, row in enumerate(sheetData):
         # validation of row 1 column 1.
         if i == 0:
@@ -160,6 +162,9 @@ def sync_validate(requestParam,sheetName, sheetData, sheetWiseData):
                     headerRow = sheetData[i]
                     sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseHeaderValidation(requestParam,section_pointer, headers, sheetData, i)
                     sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseHeaderPeriodValidation(requestParam, section_pointer, sheetData, i)
+               
+            else :
+                sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseValueValidation(requestParam, sheetData, i,headerRow)
         #Header validation
         elif  lower_case(sheetData[i][0]) == section_pointer_name :
                 headers = massupload_validation_schema.massUploadValidationSchema['headerMapping'][section_pointer]
@@ -167,7 +172,9 @@ def sync_validate(requestParam,sheetName, sheetData, sheetWiseData):
                     headerRow = sheetData[i]
                     sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseHeaderValidation(requestParam,section_pointer, headers, sheetData, i)
                     sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseHeaderPeriodValidation(requestParam, section_pointer, sheetData, i)
-                     
+        else :
+            sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseValueValidation(requestParam, sheetData, i,headerRow)
+            
             # attributeSubCategoryFields = get_attribute_subcategories(v2ScopeCategoryConfig.scopeConfig)
 
 
@@ -215,11 +222,11 @@ def sheetWiseHeaderPeriodValidation(requestParam, sectionPointer, sheetData, row
     periodHeaderArr = []
 
     def convertAndValidateHeader(header):
-        if header is '':
+        if header == '':
             return None
         try:
             if isinstance(header, (int, float)):
-                headerDate = excelDateToJsDate(header).strftime("%b-%Y").lower()
+                headerDate = excelDateToFormatedDate(header).strftime("%b-%Y").lower()
             elif isinstance(header, str):
                 headerDate = header.strip().lower()
                 if not validateDate(headerDate):
@@ -283,6 +290,28 @@ def sheetWiseHeaderPeriodValidation(requestParam, sectionPointer, sheetData, row
 
     return validationStr
 
+def sheetWiseValueValidation(requestParam, sheetData, rowIndex,headerRow):
+    validationStr = ''
+    isValidate = True
+    for index in range(requestParam['headerStartIndexColumnNumber'], len(sheetData[rowIndex])):
+        columnName = headerRow[index]
+        if isinstance(headerRow[index], (int, float)):
+            columnName = excelDateToFormatedDate(headerRow[index]).strftime("%b-%Y")
+
+        cellValue = sheetData[rowIndex][index]
+        if isValidate:
+            if cellValue == '':
+                validationStr += f"<li>Row - {rowIndex + 1} : Value required in {columnName} column.</li>"
+            # Check if the value is less than 0
+            elif isinstance(cellValue, (int, float)) and cellValue < 0:
+                validationStr += f"<li>Row - {rowIndex + 1} : Value must be 0 or higher in {columnName} column.</li>"
+            
+
+        # Check if the value is not numeric
+        if cellValue != '' and not isinstance(cellValue, (int, float)):
+            validationStr += f"<li>Row - {rowIndex + 1} : Value must be numeric in {columnName} column.</li>"
+
+    return validationStr
 
 
     
@@ -311,7 +340,7 @@ def get_attribute_subcategories(config: Dict[str, Any]) -> List[str]:
     traverse(config)
     return subcategories
 
-def excelDateToJsDate(excel_date: float) -> str:
+def excelDateToFormatedDate(excel_date: float) -> str:
     """Convert Excel date to a JS-like date string."""
     start_date = datetime(1899, 12, 30)
     result_date = start_date + timedelta(days=excel_date)
