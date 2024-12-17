@@ -240,6 +240,7 @@ def sheetWiseHeaderPeriodValidation(requestParam, sectionPointer, sheetData, row
             
     if len(periodHeaderArr) < 12:
         validationStr += f"<li>Row - {rowIndex + 1}: Must have at least 12 months and year headers.</li>"
+        
 
     # Validate sorted and current date constraints
     sortedDates = sorted(
@@ -250,10 +251,24 @@ def sheetWiseHeaderPeriodValidation(requestParam, sectionPointer, sheetData, row
         validationStr += f"<li>Row - {rowIndex + 1}: Month and year headers must be prior to the current month/year.</li>"
 
     # Check for duplicate headers
-    duplicates = [item for item, count in Counter(periodHeaderArr).items() if count > 1]
-    if duplicates:
-        validationStr += f"<li>Row - {rowIndex + 1}: Duplicate headers found ({', '.join(duplicates)}).</li>"
+    if periodHeaderArr:
+        duplicates = [item for item, count in Counter(periodHeaderArr).items() if count > 1]
+        if duplicates:
+            validationStr += f"<li>Row - {rowIndex + 1}: Duplicate headers found ({', '.join(duplicates)}).</li>"
+            
+        # print(periodHeaderArr,"periodHeaderArr")
+        monthYearDates = sorted(
+            datetime.strptime(value + '-01', '%b-%Y-%d') for value in periodHeaderArr
+        )
+    
+        yearMonth = '202101'
+        benchmarkDate = datetime.strptime(yearMonth[:4] + '-' + yearMonth[4:] + '-01', '%Y-%m-%d')
+            
+        if benchmarkDate > monthYearDates[0]:
+            validationStr += f"<li>Row - {rowIndex + 1}: Benchmark Period should be greater or equal to your site benchmark period.</li>"
 
+        if benchmarkDate == monthYearDates[0]:
+            requestParam['isBenchmark'] = True 
     # Match headers with global monthYearHeader
     # if not requestParam.get('monthYearHeader'):
     #     requestParam['monthYearHeader'] = [h.replace("b-", "") for h in periodHeaderArr if h]
