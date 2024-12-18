@@ -1,5 +1,5 @@
 from fastapi import HTTPException
-from app.config import massupload_config,v2ScopeCategoryConfig
+from app.config import massupload_config,v2ScopeCategoryConfig,v2ReportFieldsConfig
 import logging
 import pandas as pd
 from app.schemas import massupload_validation_schema
@@ -11,6 +11,7 @@ from datetime import datetime,timedelta
 from openpyxl import load_workbook
 from typing import Dict, List, Any
 from collections import Counter
+import copy
 
 labelIgnore = ['category','custom']
 sectionVal = {
@@ -164,6 +165,8 @@ def sync_validate(requestParam,sheetName, sheetData, sheetWiseData):
                     sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseHeaderPeriodValidation(requestParam, section_pointer, sheetData, i)
                
             else :
+                #Property and value validation
+                sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseSectionPropertiesValidation(requestParam, section_pointer, sheetData, i)
                 sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseValueValidation(requestParam, sheetData, i,headerRow)
         
         elif  lower_case(sheetData[i][0]) == section_pointer_name :
@@ -174,7 +177,8 @@ def sync_validate(requestParam,sheetName, sheetData, sheetWiseData):
                     sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseHeaderValidation(requestParam,section_pointer, headers, sheetData, i)
                     sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseHeaderPeriodValidation(requestParam, section_pointer, sheetData, i)
         else :
-            #Value validation
+            #Property and value validation
+            sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseSectionPropertiesValidation(requestParam, section_pointer, sheetData, i)
             sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseValueValidation(requestParam, sheetData, i,headerRow)
             
             # attributeSubCategoryFields = get_attribute_subcategories(v2ScopeCategoryConfig.scopeConfig)
@@ -315,7 +319,174 @@ def sheetWiseValueValidation(requestParam, sheetData, rowIndex,headerRow):
 
     return validationStr
 
+def sheetWiseSectionPropertiesValidation(requestParam, sectionPointer, sheetData, rowIndex):
+    validationStr = ''
+    if sectionPointer == 'section_1':
+        companyInfoField = sheetData[rowIndex][0]
+        companyInfoCustomField = sheetData[rowIndex][1]
+        sectionFields = v2ReportFieldsConfig.fieldsConfig['companyInfoFields']
+        
+        sectionLabel = ['custom 1', 'custom 2', 'custom 3'] + [
+            field['label'].strip().lower() for field in sectionFields.values()
+        ]
+        # Convert the companyInfoField to lowercase for case-insensitive comparisons
+        if companyInfoField is not None:
+            companyInfoFieldStr = companyInfoField.strip().lower()
 
+            # Validate if companyInfoField matches any valid label
+            if companyInfoFieldStr not in sectionLabel:
+                validationStr += (
+                    f"<li>Row - {rowIndex + 1}: ({sectionVal[sectionPointer]}) "
+                    f"{companyInfoField.strip()} value not match with {', '.join(sectionLabel)}.</li>"
+                )
+
+            # Custom field-specific validations
+            if companyInfoFieldStr.startswith('custom'):
+                if not companyInfoCustomField:
+                    validationStr += (
+                        f"<li>Row - {rowIndex + 1}: ({sectionVal[sectionPointer]}) "
+                        f"custom type must be required for {companyInfoField}.</li>"
+                    )
+            elif companyInfoCustomField:
+                validationStr += (
+                    f"<li>Row - {rowIndex + 1}: ({sectionVal[sectionPointer]}) "
+                    f"custom type should be blank for {companyInfoField}.</li>"
+                )
+    elif sectionPointer == 'section_2' or sectionPointer == 'section_3' :
+        SheetDataObj = {
+            "attributeSubCategory": sheetData[rowIndex][1] if sheetData[rowIndex][1] else "blank",
+            "type": sheetData[rowIndex][2],
+            "subType": sheetData[rowIndex][3],
+            "unit": sheetData[rowIndex][4] if sheetData[rowIndex][4] else "blank",
+        }
+        validationStr +=  validateFields(requestParam , SheetDataObj, sheetData, rowIndex)
+
+    return validationStr
+
+
+def validateFields(request_param, sheet_data_obj, sheet_data, row_index):
+    section_fields = request_param["attributeCategoryFields"].get("attributeSubCategory", {})
+    validation_str = ''
+    attribute_sub_category_valid = False
+    is_type_valid = False
+    is_sub_type_valid = False
+    attribute_sub_category_labels = []
+    custom_project_found = False
+    category = request_param["category"]
+
+    # Attribute sub-category validation
+    if section_fields != "userdefine":
+        for key, section_field in section_fields.items():
+            if key == "custom":
+                custom_project_found = True
+            fieldData = section_field.get("type", {})
+            attribute_sub_category_field = section_field.get("sheetLabel") or section_field.get("label")
+            attribute_sub_category_labels.append(attribute_sub_category_field)
+            if attribute_sub_category_field.strip().lower() == sheet_data_obj["attributeSubCategory"].strip().lower():
+                attribute_sub_category_valid = True
+                type_labels = []
+
+                # Handling 'plane' specific logic
+                # print(key,"keyyyyy")
+                if key == "plane":
+                    attributeSubCategoryPlane = copy.deepcopy(fieldData)
+                    print(attributeSubCategoryPlane,"444444444444444444")
+                    section_field["type"] = {
+                        "domestic": attributeSubCategoryPlane["plane"]["options"]["domestic"],
+                        "shortHaul": attributeSubCategoryPlane["plane"]["options"]["shortHaul"],
+                        "longHaul": attributeSubCategoryPlane["plane"]["options"]["longHaul"],
+                        "international": attributeSubCategoryPlane["plane"]["options"]["international"],
+                    }
+                    print(attributeSubCategoryPlane,"555555555555")
+                    if request_param["sectionPointer"] == "section_5":
+                        section_field["type"].update({
+                            "economy": attributeSubCategoryPlane["plane"]["options"]["economy"],
+                            "business": attributeSubCategoryPlane["plane"]["options"]["business"]
+                        })
+                    section_field["unit"] = attributeSubCategoryPlane["plane"]["unit"]
+
+                for type_key, type_field in section_field["type"].items():
+                    type_label = type_field.get("sheetLabel") or type_field.get("label")
+                    type_labels.append(type_label)
+                    if type_label.strip().lower() == sheet_data_obj["type"].strip().lower():
+                        is_type_valid = True
+                
+                        # Unit validation
+                        units = [unit.strip().lower() for unit in type_field.get("unit", [])]
+                        if sheet_data_obj["unit"].strip().lower() not in units:
+                            validation_str += (
+                                f"<li>Row - {row_index + 1}: Invalid unit {sheet_data_obj['unit']}. "
+                                f"It should be one of these: {', '.join(units)}.</li>"
+                            )
+                        # Sub-type validation
+                        subtype_labels = []
+                        options = type_field.get("options", {})
+                        for sub_type_key, sub_type_field in options.items():
+                            sub_type_label = sub_type_field.get("sheetLabel") or sub_type_field.get("label")
+                            subtype_labels.append(sub_type_label)
+                            if sub_type_label.strip().lower() == sheet_data_obj["subType"].strip().lower():
+                                is_sub_type_valid = True
+
+                                # Validate energy source
+                                if category == "PURCHASE_ENERGY_LABEL" and "generated" in sub_type_field.get("source", []):
+                                    validation_str += (
+                                        f"<li>Row - {row_index + 1}: Invalid subtype {sheet_data_obj['subType']}. "
+                                        f"It should be {options['grid']['label']}.</li>"
+                                    )
+                                elif category == "GENERATED_ENERGY_LABEL" and "non-generated" in sub_type_field.get("source", []):
+                                    generated_labels = [
+                                        option["label"]
+                                        for option in options.values()
+                                        if "generated" in option.get("source", [])
+                                    ]
+                                    validation_str += (
+                                        f"<li>Row - {row_index + 1}: Invalid subtype {sheet_data_obj['subType']}. "
+                                        f"It should be one of these: {', '.join(generated_labels)}.</li>"
+                                    )
+                                # Validate unit for sub-type
+                                if sub_type_field.get("unit", []) :
+                                    units = [unit.strip().lower() for unit in sub_type_field.get("unit", [])]
+                                else :
+                                    units = [unit.strip().lower() for unit in type_field.get("unit", [])]
+                                    
+                                if sheet_data_obj["unit"].strip().lower() not in units:
+                                    validation_str += (
+                                        f"<li>Row - {row_index + 1}: Invalid unit {sheet_data_obj['unit']}. "
+                                        f"It should be one of these: {', '.join(units)}.</li>"
+                                    )
+
+                        if not is_sub_type_valid and subtype_labels:
+                            validation_str += (
+                                f"<li>Row - {row_index + 1}: Invalid sub-type {sheet_data_obj['subType'] or 'blank'}. "
+                                f"It should be one of these: {', '.join(subtype_labels)}.</li>"
+                            )
+
+                if not is_type_valid and type_labels:
+                    validation_str += (
+                        f"<li>Row - {row_index + 1}: Invalid type {sheet_data_obj['type'] or 'blank'}. "
+                        f"It should be one of these: {', '.join(type_labels)}.</li>"
+                    )
+
+        if not attribute_sub_category_valid:
+            validation_str += (
+                f"<li>Row - {row_index + 1}: Invalid sub-category {sheet_data_obj['attributeSubCategory']}. "
+                f"It should be one of these: {', '.join(attribute_sub_category_labels)}.</li>"
+            )
+            if custom_project_found:
+                validation_str += (
+                    f"<li>Row - {row_index + 1}: For Custom project, 'Custom' should be added in 'Detailed Carbon' column.</li>"
+                )
+
+    elif section_fields == "userdefine":
+        validation_str += (
+            f"<li>Row - {row_index + 1}: Invalid type {sheet_data_obj['type']}. It should be 'Custom'.</li>"
+        )
+    else:
+        validation_str += (
+            f"<li>Row - {row_index + 1}: Invalid sub-category {sheet_data_obj['attributeSubCategory']}.</li>"
+        )
+
+    return validation_str
     
 def lower_case(value: str) -> str:
     """Convert a string to lowercase and strip whitespace."""
