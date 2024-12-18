@@ -165,14 +165,16 @@ def sync_validate(requestParam,sheetName, sheetData, sheetWiseData):
                
             else :
                 sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseValueValidation(requestParam, sheetData, i,headerRow)
-        #Header validation
+        
         elif  lower_case(sheetData[i][0]) == section_pointer_name :
                 headers = massupload_validation_schema.massUploadValidationSchema['headerMapping'][section_pointer]
                 if headers:
                     headerRow = sheetData[i]
+                    #Header validation
                     sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseHeaderValidation(requestParam,section_pointer, headers, sheetData, i)
                     sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseHeaderPeriodValidation(requestParam, section_pointer, sheetData, i)
         else :
+            #Value validation
             sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseValueValidation(requestParam, sheetData, i,headerRow)
             
             # attributeSubCategoryFields = get_attribute_subcategories(v2ScopeCategoryConfig.scopeConfig)
