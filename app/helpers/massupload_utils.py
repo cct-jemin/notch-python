@@ -360,7 +360,95 @@ def sheetWiseSectionPropertiesValidation(requestParam, sectionPointer, sheetData
             "unit": sheetData[rowIndex][4] if sheetData[rowIndex][4] else "blank",
         }
         validationStr +=  validateFields(requestParam , SheetDataObj, sheetData, rowIndex)
-
+        params = [
+            {
+            'fieldName' : 'Cost/Unit',
+            'required' : True,
+            'type' : 'number',
+            'sheetData' : sheetData[rowIndex][5]
+            },
+            {
+            'fieldName' : 'Driver Name',
+            'required' : False,
+            'type' : 'string',
+            'sheetData' : sheetData[rowIndex][6]
+            },
+            {
+            'fieldName' : 'Registration',
+            'required' : False,
+            'type' : 'string',
+            'sheetData' : sheetData[rowIndex][7]
+            },
+        ]
+        validationStr +=  fieldTypeValidation(params,rowIndex)
+    elif sectionPointer == 'section_4' :
+        energyFields = ["green electricity", "electricity", "gas" ,"steam"]
+        SheetDataObj = {
+            'attributeSubCategory' : sheetData[rowIndex][1] if sheetData[rowIndex][1] else "blank",
+            'type' : sheetData[rowIndex][2],
+            'subType' : sheetData[rowIndex][3],
+            'unit' : sheetData[rowIndex][4] if sheetData[rowIndex][4] else "blank",
+            'workplace' : sheetData[rowIndex][6] if sheetData[rowIndex][6] else "blank",
+            'meterName' : sheetData[rowIndex][7],
+            'meterNumber' : sheetData[rowIndex][8]
+        }
+        if SheetDataObj['attributeSubCategory'].strip().lower() not in energyFields:
+            validationStr += (
+                f"<li>Row - {rowIndex + 1}: Invalid Sub-Category ({SheetDataObj['attributeSubCategory']}) "
+                f"It should be one of these {energyFields}.</li>"
+            )
+        else :
+            validationStr +=  validateFields(requestParam , SheetDataObj, sheetData, rowIndex)
+            params = [
+                {
+                'fieldName' : 'Cost/Unit',
+                'required' : True,
+                'type' : 'number',
+                'sheetData' : sheetData[rowIndex][5]
+                },
+                {
+                'fieldName' : 'Meter Name',
+                'required' : False,
+                'type' : 'string',
+                'sheetData' : sheetData[rowIndex][7]
+                },
+                {
+                'fieldName' : 'Meter Number',
+                'required' : False,
+                'type' : 'string',
+                'sheetData' : sheetData[rowIndex][8]
+                },
+            ]
+            validationStr +=  fieldTypeValidation(params, rowIndex)
+    # elif sectionPointer == 'section_5' :
+    #     SheetDataObj = {
+    #         'attributeSubCategory' : sheetData[rowIndex][1] if sheetData[rowIndex][1] else "blank",
+    #         'type' : sheetData[rowIndex][2] if sheetData[rowIndex][1] else "blank",
+    #         'subType' : sheetData[rowIndex][3],
+    #         'unit' : sheetData[rowIndex][4] if sheetData[rowIndex][4] else "blank",
+    #         'workplace' : sheetData[rowIndex][6] if sheetData[rowIndex][6] else "blank",
+    #         'customName' : sheetData[rowIndex][7],
+    #         'carbonFactor' : sheetData[rowIndex][8],
+    #     }
+    #     fuelsFields  = ['fuels', 'fugitive emissions']
+    #     if SheetDataObj['attributeSubCategory'].strip().lower() not in fuelsFields:
+    #         validationStr += (
+    #             f"<li>Row - {rowIndex + 1}: Invalid Sub-Category ({SheetDataObj['attributeSubCategory']}) "
+    #             f"It should be one of these {fuelsFields}.</li>"
+    #         )
+    #     else : 
+    #         validationStr +=  validateFields(requestParam , SheetDataObj, sheetData, rowIndex)
+    #         params = [
+    #             {
+    #                 'fieldName' : 'Cost/Unit',
+    #                 'required' : True,
+    #                 'type' : 'number',
+    #                 'sheetData' : sheetData[rowIndex][5]
+    #             }
+    #         ]
+    #         validationStr +=  fieldTypeValidation(params, rowIndex)
+        
+            
     return validationStr
 
 
@@ -379,7 +467,8 @@ def validateFields(request_param, sheet_data_obj, sheet_data, row_index):
         for key, section_field in section_fields.items():
             if key == "custom":
                 custom_project_found = True
-            fieldData = section_field.get("type", {})
+            
+            fieldData = copy.deepcopy(section_field)
             attribute_sub_category_field = section_field.get("sheetLabel") or section_field.get("label")
             attribute_sub_category_labels.append(attribute_sub_category_field)
             if attribute_sub_category_field.strip().lower() == sheet_data_obj["attributeSubCategory"].strip().lower():
@@ -387,53 +476,60 @@ def validateFields(request_param, sheet_data_obj, sheet_data, row_index):
                 type_labels = []
 
                 # Handling 'plane' specific logic
-                # print(key,"keyyyyy")
                 if key == "plane":
-                    attributeSubCategoryPlane = copy.deepcopy(fieldData)
-                    print(attributeSubCategoryPlane,"444444444444444444")
-                    section_field["type"] = {
+                    attributeSubCategoryPlane = copy.deepcopy(fieldData['type'])
+                    fieldData["type"] = {
                         "domestic": attributeSubCategoryPlane["plane"]["options"]["domestic"],
                         "shortHaul": attributeSubCategoryPlane["plane"]["options"]["shortHaul"],
                         "longHaul": attributeSubCategoryPlane["plane"]["options"]["longHaul"],
                         "international": attributeSubCategoryPlane["plane"]["options"]["international"],
                     }
-                    print(attributeSubCategoryPlane,"555555555555")
                     if request_param["sectionPointer"] == "section_5":
-                        section_field["type"].update({
+                        fieldData["type"].update({
                             "economy": attributeSubCategoryPlane["plane"]["options"]["economy"],
                             "business": attributeSubCategoryPlane["plane"]["options"]["business"]
                         })
-                    section_field["unit"] = attributeSubCategoryPlane["plane"]["unit"]
-
-                for type_key, type_field in section_field["type"].items():
-                    type_label = type_field.get("sheetLabel") or type_field.get("label")
+                    fieldData["unit"] = attributeSubCategoryPlane["plane"]["unit"]
+                    
+                    
+                for type_key, type_field in fieldData["type"].items():
+                    typeFields = copy.deepcopy(fieldData['type'][type_key])
+                    type_label = typeFields.get("sheetLabel") or typeFields.get("label")
                     type_labels.append(type_label)
                     if type_label.strip().lower() == sheet_data_obj["type"].strip().lower():
                         is_type_valid = True
-                
-                        # Unit validation
-                        units = [unit.strip().lower() for unit in type_field.get("unit", [])]
-                        if sheet_data_obj["unit"].strip().lower() not in units:
+                        units = [unit.strip().lower() for unit in typeFields.get("unit", [])]
+                        if typeFields.get("unit", []) and sheet_data_obj["unit"].strip().lower() not in units:
                             validation_str += (
                                 f"<li>Row - {row_index + 1}: Invalid unit {sheet_data_obj['unit']}. "
                                 f"It should be one of these: {', '.join(units)}.</li>"
                             )
-                        # Sub-type validation
+                            
+                        if sheet_data_obj["attributeSubCategory"].strip().lower() == 'plane':
+                            attributeSubCategoryUnit = fieldData['unit']
+                            if sheet_data_obj["unit"].strip().lower() not in attributeSubCategoryUnit:
+                                validation_str += (
+                                    f"<li>Row - {row_index + 1}: Invalid unit {sheet_data_obj['unit']}. "
+                                    f"It should be one of these222: {', '.join(attributeSubCategoryUnit)}.</li>"
+                                )
+                               
                         subtype_labels = []
-                        options = type_field.get("options", {})
+                        options = typeFields.get("options", {})
                         for sub_type_key, sub_type_field in options.items():
-                            sub_type_label = sub_type_field.get("sheetLabel") or sub_type_field.get("label")
+                            subTypeFields = typeFields['options'][sub_type_key]
+                            # print( typeFields['options'],"qqqq")
+                            sub_type_label = subTypeFields.get("sheetLabel") or subTypeFields.get("label")
                             subtype_labels.append(sub_type_label)
                             if sub_type_label.strip().lower() == sheet_data_obj["subType"].strip().lower():
                                 is_sub_type_valid = True
 
                                 # Validate energy source
-                                if category == "PURCHASE_ENERGY_LABEL" and "generated" in sub_type_field.get("source", []):
+                                if category == "PURCHASE_ENERGY_LABEL" and "generated" in subTypeFields.get("source", []):
                                     validation_str += (
                                         f"<li>Row - {row_index + 1}: Invalid subtype {sheet_data_obj['subType']}. "
                                         f"It should be {options['grid']['label']}.</li>"
                                     )
-                                elif category == "GENERATED_ENERGY_LABEL" and "non-generated" in sub_type_field.get("source", []):
+                                elif category == "GENERATED_ENERGY_LABEL" and "non-generated" in subTypeFields.get("source", []):
                                     generated_labels = [
                                         option["label"]
                                         for option in options.values()
@@ -444,10 +540,10 @@ def validateFields(request_param, sheet_data_obj, sheet_data, row_index):
                                         f"It should be one of these: {', '.join(generated_labels)}.</li>"
                                     )
                                 # Validate unit for sub-type
-                                if sub_type_field.get("unit", []) :
-                                    units = [unit.strip().lower() for unit in sub_type_field.get("unit", [])]
+                                if subTypeFields.get("unit", []) :
+                                    units = [unit.strip().lower() for unit in subTypeFields.get("unit", [])]
                                 else :
-                                    units = [unit.strip().lower() for unit in type_field.get("unit", [])]
+                                    units = [unit.strip().lower() for unit in typeFields.get("unit", [])]
                                     
                                 if sheet_data_obj["unit"].strip().lower() not in units:
                                     validation_str += (
@@ -487,6 +583,53 @@ def validateFields(request_param, sheet_data_obj, sheet_data, row_index):
         )
 
     return validation_str
+
+def fieldTypeValidation(params,rowIndex):
+    validationStr = ""
+    if params:
+        for obj in params:
+            fieldName = obj.get('fieldName', 'unknown')
+            sheetDataValue = obj.get('sheetData')
+            required = obj.get('required', False)
+            expectedType = obj.get('type')
+
+            # Convert expected type to Python type
+            pythonType = str if expectedType == 'string' else (int, float) if expectedType == 'number' else None
+            # Check if sheetDataValue matches expected type
+            if pythonType and sheetDataValue and not isinstance(sheetDataValue, pythonType):
+                validationStr += (
+                    f"<li>Row - {rowIndex + 1}: Invalid field {fieldName}. "
+                    f"It shoulds be {expectedType}.</li>"
+                )
+
+            # Handle required validations
+            if required:
+                if expectedType == 'number' and not isinstance(sheetDataValue, (int, float)):
+                    validationStr += (
+                        f"<li>Row - {rowIndex + 1}: Invalid field {fieldName}. "
+                        f"It should not be blank and should be a number.</li>"
+                    )
+                elif expectedType == 'string':
+                    if isinstance(sheetDataValue, (int, float)):
+                        validationStr += (
+                            f"<li>Row - {rowIndex + 1}: Invalid field {fieldName}. "
+                            f"It should not be a number.</li>"
+                        )
+                    elif not sheetDataValue:
+                        validationStr += (
+                            f"<li>Row - {rowIndex + 1}: Invalid field {fieldName}. "
+                            f"It should not be blank.</li>"
+                        )
+            # Handle non-required fields with unexpected data
+            elif required == '' and sheetDataValue:
+                validationStr += (
+                    f"<li>Row - {rowIndex + 1}: Invalid field {fieldName}. "
+                    f"It shouldss be blank.</li>"
+                )
+
+    return validationStr
+
+    
     
 def lower_case(value: str) -> str:
     """Convert a string to lowercase and strip whitespace."""
