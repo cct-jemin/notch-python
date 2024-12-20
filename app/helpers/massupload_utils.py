@@ -464,7 +464,7 @@ def sheetWiseSectionPropertiesValidation(requestParam, sectionPointer, sheetData
             'subType' : sheetData[rowIndex][3] ,
             'unit' : sheetData[rowIndex][4],
         }
-        if SheetDataObj['type'].strip().lower() == 'custom' or SheetDataObj['attributeType'].strip().lower() == 'custom' :
+        if isinstance(SheetDataObj['type'], str) and SheetDataObj['type'].strip().lower() == 'custom' or SheetDataObj['attributeType'].strip().lower() == 'custom' :
             isTypeRequired = True
             if SheetDataObj['attributeType'].strip().lower() == 'custom' and (not SheetDataObj.get('subType') or SheetDataObj['subType'] is None):
                 isTypeRequired = False
