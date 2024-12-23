@@ -13,6 +13,7 @@ from typing import Dict, List, Any
 from collections import Counter
 import copy
 
+
 labelIgnore = ['category','custom']
 sectionVal = {
     "section_1": "Company Information",
@@ -22,6 +23,7 @@ sectionVal = {
     "section_5": "Fuels",
     "section_6": "Detailed Carbon",
 }
+monthYearHeader = []
 executor = ThreadPoolExecutor()
 
 async def sheetWiseValidation(requestParam):
@@ -40,7 +42,8 @@ async def sheetWiseValidation(requestParam):
         sheet = workbook[sheetName]
         sheetData = [[cell.value if cell.value is not None else '' for cell in row] for row in sheet.iter_rows()]
         # print(sheetData,"---")
-        tasks.append(validate_sheet(requestParam,sheetName, sheetData,sheetWiseData))
+        # tasks.append(validate_sheet(requestParam,sheetName, sheetData,sheetWiseData))
+        sync_validate(requestParam,sheetName, sheetData,sheetWiseData)
         
     # Execute all tasks concurrently
     await asyncio.gather(*tasks)
@@ -80,12 +83,15 @@ async def validate_sheet(requestParam,sheetName, sheetData,sheetWiseData):
 def sync_validate(requestParam,sheetName, sheetData, sheetWiseData):
     # start_time = time.time()
     # print(f"Start processing sheet: {sheetName} at {start_time:.2f}")
+    sectionWiseSheetData = {}
     maxAllowedColumnNumber = 25
     headerStartIndexColumnNumber = 13
+    headerPeriodArr = []
     requestParam.update({
         'maxAllowedColumnNumber': maxAllowedColumnNumber,
         'headerStartIndexColumnNumber': headerStartIndexColumnNumber,
-        'sheetName': sheetName
+        'sheetName': sheetName,
+        'headerPeriodArr':headerPeriodArr
     })
     sheetInfo = massupload_validation_schema.massUploadValidationSchema["sheetMapping"][sheetName.lower()]
     sectionNameMapping = massupload_validation_schema.massUploadValidationSchema['sectionNameMapping']
@@ -96,6 +102,7 @@ def sync_validate(requestParam,sheetName, sheetData, sheetWiseData):
     requestParam.update({'scope': scope, 'category': category})
     sheetWiseData['sheets'][sheetName] = {"scope" : scope, "category" : category, "data" : [], "sectionPointer" : '', "validationStr" : ''}
     section_pointer_name = None
+    section_pointer = ''
     valid_section_name_array = [
         sectionNameMappingReverse[sectionPointer]
         for sectionPointer in sheetInfo['sectionPointer']
@@ -190,10 +197,34 @@ def sync_validate(requestParam,sheetName, sheetData, sheetWiseData):
             sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseSectionPropertiesValidation(requestParam, section_pointer, sheetData, i)
             sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseValueValidation(requestParam, sheetData, i,headerRow)
             
-        
+        if section_pointer not in sectionWiseSheetData:
+            sectionWiseSheetData[section_pointer] = []
 
+        sectionWiseSheetData[section_pointer].append(sheetData[i])
+            
+    sheetWiseData['sheets'][sheetName]['data'] = sectionWiseSheetData;   
+    if not requestParam['isBenchmark']:
+        if len(requestParam['monthYearHeader']) == 12:
+            monthYearDates = sorted(
+                datetime.strptime(value + '-01', '%b-%Y-%d') for value in requestParam['monthYearHeader']
+            )
+            yearMonth = '202101'
+            benchmarkDate = datetime.strptime(yearMonth[:4] + '-' + yearMonth[4:] + '-01', '%Y-%m-%d')
+            if benchmarkDate > monthYearDates[0]:
+                sheetWiseData['sheets'][sheetName]['validationStr'] += f"<li>Data should be greater or equal to your site benchmark period.</li>"
+            elif benchmarkDate < monthYearDates[0]:
+                previousMonth = (monthYearDates[0] - timedelta(days=1)).strftime('%b-%Y')
+                checkExists = False
+                if not checkExists:
+                    sheetWiseData['sheets'][sheetName]['validationStr'] +=  f'<li>Please insert {previousMonth} month-year data first.</li>'
+     
+    # if  requestParam['isBenchmark']:
+    #     print(requestParam['headerPeriodArr'],"1111111111")  
+                
+                
+                
 
-    sheetWiseData['sheets'][sheetName]['data'] = sheetData
+    # sheetWiseData['sheets'][sheetName]['data'] = sheetData
     # print(f"Finished processing sheet: {sheetName} at {time.time():.2f}, duration: {time.time() - start_time:.2f} seconds")
     
 def sheetWiseHeaderValidation(request_param,section_pointer, headers, sheetData, i):
@@ -274,6 +305,7 @@ def sheetWiseHeaderPeriodValidation(requestParam, sectionPointer, sheetData, row
 
     # Check for duplicate headers
     if periodHeaderArr:
+        monthYearHeader = [re.sub(r'^b-', '', h) for h in periodHeaderArr if h]
         duplicates = [item for item, count in Counter(periodHeaderArr).items() if count > 1]
         if duplicates:
             validationStr += f"<li>Row - {rowIndex + 1}: Duplicate headers found ({', '.join(duplicates)}).</li>"
@@ -291,17 +323,22 @@ def sheetWiseHeaderPeriodValidation(requestParam, sectionPointer, sheetData, row
 
         if benchmarkDate == monthYearDates[0]:
             requestParam['isBenchmark'] = True 
-    # Match headers with global monthYearHeader
-    # if not requestParam.get('monthYearHeader'):
-    #     requestParam['monthYearHeader'] = [h.replace("b-", "") for h in periodHeaderArr if h]
-    #     requestParam['baseHeader'] = sectionPointer
-    # else:
-    #     currentHeaders = [h.replace("b-", "") for h in periodHeaderArr if h]
-    #     if not set(requestParam['monthYearHeader']) == set(currentHeaders):
-    #         validationStr += (
-    #             f"<li>Row - {rowIndex + 1}: Month-year headers should match with "
-    #             f"{requestParam['baseHeader']} month-year headers.</li>"
-    #         )
+            requestParam['headerPeriodArr'] =  list(set(requestParam['headerPeriodArr'] + monthYearHeader))
+        else :
+            requestParam['isBenchmark'] = False 
+             # Match headers with global monthYearHeader
+            if not requestParam.get('monthYearHeader'):
+                requestParam['monthYearHeader'] =  [re.sub(r'^b-', '', h) for h in periodHeaderArr if h]
+                requestParam['baseHeader'] = sectionPointer
+            else:
+                # currentHeaders = [h.replace("b-", "") for h in periodHeaderArr if h]
+                currentHeaders = [re.sub(r'^b-', '', h) for h in periodHeaderArr if h]
+                if not set(requestParam['monthYearHeader']) == set(currentHeaders):
+                    validationStr += (
+                        f"<li>Row - {rowIndex + 1}: Month-year headers should match with "
+                        f"{requestParam['baseHeader']} month-year headers.</li>"
+                    )
+   
 
     return validationStr
 
