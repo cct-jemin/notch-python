@@ -23,7 +23,30 @@ sectionVal = {
     "section_5": "Fuels",
     "section_6": "Detailed Carbon",
 }
+monthArr = ['January','February','March','April','May','June','July','August','September','October','November','December']
 monthYearHeader = []
+carElectricLabel = "car - electric",
+CAR_ELECTRIC_OBJECT = {
+      "kwh": {
+          "fuelType": "electricity",
+          "fuelSubType": "grid",
+          "unit":"kwh",
+      },
+      "kwh - green (grid)": {
+          "fuelType": "greenElectricity",
+          "fuelSubType": "grid",
+          "unit":"kwh - Green (Grid)",
+      },
+      "kwh - green (generated)": {
+          "fuelType": "greenElectricity",
+          "fuelSubType": "nonGrid",
+          "unit":"kwh - Green (Generated)",
+      }
+},
+PURCHASE_ENERGY_LABEL = "purchasedEnergy",
+GENERATED_ENERGY_LABEL = 'generatedElectricity',
+CAR_ELECTRIC_GENERATED_ELECTRICITY_UNIT  = 'kwh - green (generated)'
+
 executor = ThreadPoolExecutor()
 
 async def sheetWiseValidation(requestParam):
@@ -72,9 +95,12 @@ async def sheetWiseValidation(requestParam):
         return {"isAllSheetValid":False,"validationObj": validation_obj}
     else :
         if requestParam['isBenchmark']:
-            print(requestParam['monthYearHeader'],"aaaaaaaaaa")
+            # print(sheetWiseData,"aaaaaaaaaa")
+            # print(list(requestParam['monthYearHeader'].keys()))
+            sectionHeader = list(requestParam['monthYearHeader'].keys())
+            saveSheetWiseCarbonData(requestParam, sheetWiseData, requestParam['monthYearHeader'][sectionHeader[0]])
         else :
-            print(requestParam['monthYearHeader'],"-------------------")
+            saveSheetWiseCarbonData(requestParam, sheetWiseData,[])
         return {"isAllSheetValid":True,"validationObj": validation_obj}
 
 
@@ -791,8 +817,435 @@ def fieldTypeValidation(params,rowIndex):
                 )
 
     return validationStr
-
+def saveSheetWiseCarbonData(request_param, sheet_wise_data, month_year_header=[]):
+    final_obj = {}
+    delete_custom = {
+        'custom_1': True,
+        'custom_2': True,
+        'custom_3': True
+    }
     
+    benchmark_period = [
+        '202101', '202102', '202103', '202104', '202105', '202106',
+        '202107', '202108', '202109', '202110', '202111', '202112'
+    ]
+    
+    if request_param.get('isBenchmark') and len(month_year_header) == 12:
+        request_param['monthYearHeader'] = month_year_header
+        
+    for yearcnt in range(len(request_param['monthYearHeader'])):
+        section_one = {}
+        section_two = {}
+        section_three = {}
+        section_four = {
+            'electricity': [],
+            'gas': []
+        }
+        section_five = {}
+        month_str = request_param['monthYearHeader'][yearcnt][:3]
+        month_no = get_month(month_str)
+        year_month = int(request_param['monthYearHeader'][yearcnt].split('-')[1])
+        year_month = f'{year_month}{month_no}'
+        direct_carbon = None
+        
+        if year_month in benchmark_period:
+            request_param['isBenchmark'] = True
+        
+        if month_no is not None:
+            final_obj['monthName'] = monthArr[month_no]
+            final_obj['month'] = month_no + 1
+            month = f"{final_obj['month']:02d}"  # Zero-padded month (e.g., 01 for Jan)
+            final_obj['year'] = int(request_param['monthYearHeader'][yearcnt].split('-')[1])
+            final_obj['yearMonth'] = f"{final_obj['year']}{month}"
+            final_obj['total_carbon'] = None
+        
+        # print(sheet_wise_data['sheets'].items(),"111111111")
+        for sheet_name, sheet_data in sheet_wise_data['sheets'].items():
+            category_row = ''
+            section_wise_data = {}
+            for data_row,pointer in enumerate(sheet_data['data']):
+                if sheet_data['data'][pointer][0][0].lower() == 'category':
+                    category_row = sheet_data['data'][pointer][0]
+                elif category_row:
+                    sheet_data['data'][pointer].insert(0, category_row)
+
+                section_wise_data[pointer] = sheet_data['data'][pointer]
+                category = sheet_data['category']
+                scope = sheet_data['scope']
+
+                # Section 1 (Company Info)
+                if 'section_1' in section_wise_data:
+                    for s_cnt1 in range(1, len(section_wise_data['section_1'])):
+                        row_data = section_wise_data['section_1'][s_cnt1]
+                        company_info_row = row_data[0]
+                        custom_type_row = row_data[1]
+                        value = row_data[yearcnt + request_param['headerStartIndexColumnNumber']]
+
+                        if company_info_row.lower().startswith('custom'):
+                            if 'custom' not in section_one:
+                                section_one['custom'] = {}
+
+                            if company_info_row.lower() == 'custom 1':
+                                section_one['custom']['custom_1'] = {
+                                    'metric': custom_type_row,
+                                    'value': value,
+                                    'icon': ""
+                                }
+                                delete_custom['custom_1'] = custom_type_row is None
+
+                            if company_info_row.lower() == 'custom 2':
+                                section_one['custom']['custom_2'] = {
+                                    'metric': custom_type_row,
+                                    'value': value,
+                                    'icon': ""
+                                }
+                                delete_custom['custom_2'] = custom_type_row is None
+
+                            if company_info_row.lower() == 'custom 3':
+                                section_one['custom']['custom_3'] = {
+                                    'metric': custom_type_row,
+                                    'value': value,
+                                    'icon': ""
+                                }
+                                delete_custom['custom_3'] = custom_type_row is None
+                        else:
+                            car_type = re.sub(r' - ', '', f"comp {company_info_row}").replace(' ', '_').lower()
+                            section_one[car_type] = value
+
+                    if section_wise_data['section_1'] and section_one:
+                        section_one['is_benchmark'] = request_param.get('isBenchmark', False)
+                        
+                # Employee Commuting
+                if 'section_2' in section_wise_data:
+                    for s_cnt1 in range(2, len(section_wise_data['section_2'])):
+                        row_data = section_wise_data['section_2'][s_cnt1]
+                        sub_category = row_data[1]
+                        type_ = row_data[2]
+                        sub_type = row_data[3]
+                        unit = row_data[4]
+                        cost_per_unit = row_data[5]
+                        driver_name = row_data[6]
+                        registration_number = row_data[7]
+                        is_reporting = row_data[8]
+                        value = row_data[yearcnt + request_param['headerStartIndexColumnNumber']]
+
+                        car_type = re.sub(r' - ', '', re.sub(' ', '_', type_.lower()))
+                        travel_vehicle = re.sub(' ', '_', sub_type.lower())
+                        travel_type = ""
+
+                        if car_type.startswith('car'):
+                            travel_vehicle = f"car_{travel_vehicle}"
+
+                        if sub_category.lower() == 'plane':
+                            car_type = sub_category.lower()
+                            travel_type = re.sub(' ', '_', type_.lower())
+                            travel_vehicle = re.sub(' ', '_', sub_type.lower())
+
+                        if unit and unit not in [None, '']:
+                            unit = unit.lower()
+
+                        if car_type not in section_two:
+                            section_two[car_type] = []
+
+                        inner_object = {
+                            'attributeCategory': category,
+                            'attributeSubCategory': re.sub(' ', '_', sub_category.lower()),
+                            'travelMode': car_type,
+                            'travelVehicle': travel_vehicle,
+                            'travelType': travel_type,
+                            'travelValue': value,
+                            'travel_id': None,
+                            'name': driver_name,
+                            'registration_number': registration_number,
+                            'costPerUnit': cost_per_unit,
+                            'scope': scope,
+                            'unit': unit,
+                            'isBenchmark': request_param.get('isBenchmark', False),
+                            'source': 'massUpload',
+                            'modifiedDate': datetime.now()
+                        }
+
+                        if type_.strip().lower() == carElectricLabel:
+                            electric_data = CAR_ELECTRIC_OBJECT.get(unit, {})
+                            if electric_data:
+                                inner_object.update({
+                                    'fuelType': electric_data.get('fuelType'),
+                                    'fuelSubType': electric_data.get('fuelSubType'),
+                                    'unit': electric_data.get('unit')
+                                })
+
+                        if is_reporting and is_reporting.lower() == 'yes':
+                            section_two[car_type].append(inner_object)
+
+                    if section_wise_data['section_2'] and section_two:
+                        section_two['is_benchmark'] = request_param.get('isBenchmark', False)
+                        
+                # Business Travel 
+                if 'section_3' in section_wise_data:
+                    for s_cnt1 in range(2, len(section_wise_data['section_3'])):
+                        row_data = section_wise_data['section_3'][s_cnt1]
+                        sub_category = row_data[1]
+                        type_ = row_data[2]
+                        sub_type = row_data[3]
+                        unit = row_data[4]
+                        cost_per_unit = row_data[5]
+                        driver_name = row_data[6]
+                        registration_number = row_data[7]
+                        is_reporting = row_data[8]
+                        value = row_data[yearcnt + request_param['headerStartIndexColumnNumber']]
+                        travel_vehicle = ''
+                        travel_type = ''
+                        
+                        car_type = re.sub(r' - ', '', re.sub(' ', '_', type_.lower()))
+                        travel_vehicle = re.sub(' ', '_', sub_type.lower())
+                        if car_type.startswith('car'):
+                            travel_vehicle = f"car_{travel_vehicle}"
+
+                        if sub_category.lower() == 'plane':
+                            car_type = sub_category.lower()
+                            travel_type = re.sub(' ', '_', type_.lower())
+                            travel_vehicle = re.sub(' ', '_', sub_type.lower())
+
+                        if unit and unit not in [None, '']:
+                            unit = unit.lower()
+
+                        if car_type not in section_three:
+                            section_three[car_type] = []
+                         
+                        inner_object = {
+                            'attributeCategory': category,
+                            'attributeSubCategory': re.sub(' ', '_', sub_category.lower()),
+                            'travelMode': car_type,
+                            'travelVehicle': travel_vehicle,
+                            'travelType': travel_type,
+                            'travelValue': value,
+                            'travel_id': None,
+                            'name': driver_name,
+                            'registration_number': registration_number,
+                            'costPerUnit': cost_per_unit,
+                            'scope': scope,
+                            'unit': unit,
+                            'isBenchmark': request_param.get('isBenchmark', False),
+                            'source': 'massUpload',
+                            'modifiedDate': datetime.now()
+                        }
+                        
+                        if type_.strip().lower() == carElectricLabel:
+                            if scope == 1 :
+                                inner_object.update({'scope':2,'attributeCategory' : PURCHASE_ENERGY_LABEL})
+                                if unit == CAR_ELECTRIC_GENERATED_ELECTRICITY_UNIT :
+                                    inner_object.update({'attributeCategory' : GENERATED_ENERGY_LABEL})
+                                   
+                            
+                            electric_data = CAR_ELECTRIC_OBJECT.get(unit, {})
+                            if electric_data:
+                                inner_object.update({
+                                    'fuelType': electric_data.get('fuelType'),
+                                    'fuelSubType': electric_data.get('fuelSubType'),
+                                    'unit': electric_data.get('unit')
+                                })
+                                
+                        if is_reporting and is_reporting.lower() == 'yes':
+                            section_three[car_type].append(inner_object)
+                            
+                    if section_wise_data['section_3'] and section_three:
+                        section_three['is_benchmark'] = request_param.get('isBenchmark', False)
+                        
+                if 'section_4' in section_wise_data:
+                    for s_cnt1 in range(2, len(section_wise_data['section_4'])):
+                        row_data = section_wise_data['section_4'][s_cnt1]
+                        sub_category = row_data[1]
+                        type_ = row_data[2]
+                        sub_type = row_data[3]
+                        unit = row_data[4]
+                        cost_per_unit = row_data[5]
+                        work_place = row_data[6]
+                        meter_name = row_data[7]
+                        meter_number = row_data[8]
+                        value = row_data[yearcnt + request_param['headerStartIndexColumnNumber']]
+                        
+                        car_type = re.sub(r' - ', '', re.sub(r' ', '_', type_.lower()))
+                        fuel_subtype = re.sub(r' ', '_', sub_type.lower()) if sub_type else ''
+
+                        if car_type in ['electricity', 'greenElectricity'] and work_place == 'office':
+                            fuel_subtype = fuel_subtype if fuel_subtype else 'nonGrid' if car_type == 'electricity' else 'grid'
+
+                        if unit:
+                            unit = str(unit).lower()
+                            
+                        inner_object = {
+                            'attributeCategory': category,
+                            'attributeSubCategory': sub_category,
+                            'fuelType': car_type,
+                            'fuelSubType': fuel_subtype,
+                            'scope': scope,
+                            'meterName': meter_name,
+                            'meterNumber': meter_number,
+                            'value': value,
+                            'costPerUnit': cost_per_unit,
+                            'unit': unit,
+                            'workPlace': work_place.lower(),
+                            'isBenchmark': request_param['isBenchmark'],
+                            'source': 'massUpload',
+                            'modifiedDate': datetime.now()
+                        }
+                        section_four.setdefault(car_type, []).append(inner_object)
+                    if section_wise_data['section_4'] and section_four:
+                        section_four['is_benchmark'] = request_param.get('isBenchmark', False)
+                        
+                if 'section_5' in section_wise_data:
+                    for s_cnt1 in range(2, len(section_wise_data['section_5'])):
+                        row_data = section_wise_data['section_5'][s_cnt1]
+                        sub_category = row_data[1]
+                        type_ = row_data[2]
+                        sub_type = row_data[3]
+                        unit = row_data[4]
+                        cost_per_unit = row_data[5]
+                        work_place = row_data[6]
+                        custom_type = row_data[7]
+                        carbon_factor = row_data[8]
+                        value = row_data[yearcnt + request_param['headerStartIndexColumnNumber']]
+                        
+                        car_type = re.sub(r' - ', '', to_camel_case(type_))
+
+                        if car_type not in section_four:
+                            section_four[car_type] = []
+
+                        if unit:
+                            unit = unit.lower()
+
+                        fuel_subtype = to_camel_case(sub_type) if sub_type else ''
+
+                        if car_type == 'fugitiveEmissions':
+                            fuel_subtype = fuel_subtype.lower()
+                            
+                        default_subtypes = {
+                            'fuelsGaseous': 'lpg',
+                            'fuelsLiquid': 'dieselBioFuelBlend',
+                            'bioFuels': 'bioDieselMe',
+                            'biomass': 'woodPellets',
+                            'biogas': 'biogas',
+                            'fugitiveEmissions': 'r410a'
+                        }
+                        if car_type in default_subtypes and not fuel_subtype:
+                            fuel_subtype = default_subtypes[car_type]
+                            
+                        inner_object = {
+                            'attributeCategory': category,
+                            'attributeSubCategory': to_camel_case(sub_category),
+                            'fuelType': car_type,
+                            'fuelSubType': fuel_subtype,
+                            'scope': scope,
+                            'value': value,
+                            'costPerUnit': cost_per_unit,
+                            'unit': unit,
+                            'workPlace': work_place.lower(),
+                            'isBenchmark': request_param.get('isBenchmark', False),
+                            'source': 'massUpload',
+                            'modifiedDate': datetime.now()
+                        }
+                        if fuel_subtype == 'custom':
+                            inner_object['carbonFactor'] = carbon_factor
+                            inner_object['customType'] = custom_type
+                        
+                        section_four[car_type].append(inner_object)
+                    if len(section_wise_data['section_5']) > 0 and section_four:
+                        section_four['is_benchmark'] = request_param.get('isBenchmark', False)
+                        
+                if 'section_6' in section_wise_data:
+                    for s_cnt1 in range(2, len(section_wise_data['section_6'])):
+                        row_data = section_wise_data['section_6'][s_cnt1]
+                        section = row_data[0]
+                        sub_category = row_data[1]
+                        type_ = row_data[2]
+                        sub_type = row_data[3]
+                        unit = row_data[4]
+                        cost_per_unit = row_data[5]
+                        co2_per_unit = row_data[6]
+                        value = row_data[yearcnt + request_param['headerStartIndexColumnNumber']]
+                        
+                        if unit is not None and unit not in [None, '']:
+                            unit = str(unit).lower()
+
+                        if (type_ and type_.lower() == 'custom') or (section and section.lower() == 'custom'):
+                            if 'custom' not in section_five:
+                                section_five['custom'] = []
+                            
+                            custom_data = {
+                                "attributeCategory": request_param['category'],
+                                "attributeSubCategory": sub_category,
+                                "category": sub_category,  # subType replaced with subCategory
+                                "subType": sub_type,
+                                "scope": scope,
+                                "unit": unit,
+                                "value": value,
+                                "co2PerUnit": co2_per_unit,
+                                "costPerUnit": cost_per_unit
+                            }
+                            if section and section.lower() == 'custom' and type_:
+                                custom_data['type'] = type_
+                
+                            section_five['custom'].append(custom_data)
+            
+                        elif sub_category and sub_category.lower() == 'direct carbon':
+                            direct_carbon = value
+                            
+                        else:
+                            sub_category_field = to_camel_case(sub_category).replace(' - ', '')
+                            type_field = to_camel_case(type_).replace(' - ', '')
+
+                            if sub_category_field not in section_five:
+                                section_five[sub_category_field] = []
+                            if type_field not in section_five:
+                                section_five[type_field] = []
+
+                            inner_object = {
+                                "attributeCategory": request_param['category'],
+                                "attributeSubCategory": sub_category_field,
+                                "type": type_field,
+                                "subType": to_camel_case(sub_type) if sub_type else None,
+                                "scope": scope,
+                                "unit": unit,
+                                "costPerUnit": cost_per_unit,
+                                "value": value,
+                                "isBenchmark": request_param['isBenchmark'],
+                                "source": 'massUpload',
+                                "modifiedDate": datetime.now()
+                            }
+                            
+                            section_five[type_field].append(inner_object)
+                    if len(section_wise_data['section_6']) > 0 and len(section_five) > 0:
+                        section_five['is_benchmark'] = request_param.get('isBenchmark', False)
+            
+
+        final_obj['uploadType'] = 'category'
+        if section_one:
+            final_obj['companyInfo'] = section_one
+        if section_two:
+            final_obj['employeeTravel'] = section_two
+        if section_three:
+            final_obj['businessTravel'] = section_three
+        if section_four:
+            final_obj['energyFuels'] = section_four
+        if section_four:
+            final_obj['detailedCarbon'] = section_five
+            
+        # print(direct_carbon,"111111111")
+        if direct_carbon is not None:
+            if 'detailedCarbon' not in final_obj:
+                final_obj['detailedCarbon'] = {'is_benchmark': request_param['isBenchmark']}
+                final_obj['carbonDirectCarbon'] = direct_carbon
+            else:
+                final_obj['carbonDirectCarbon'] = direct_carbon
+                
+        # Check if 'type' exists in custom project and insert flag
+        if final_obj.get('detailedCarbon', {}).get('custom', []):
+            for item in final_obj['detailedCarbon']['custom']:
+                if 'type' not in item:
+                    final_obj['customTypeExists'] = False
+                    break
+            
+    return final_obj
     
 def lower_case(value: str) -> str:
     """Convert a string to lowercase and strip whitespace."""
@@ -828,3 +1281,13 @@ def excelDateToFormatedDate(excel_date: float) -> str:
 def validateDate(date_str: str) -> bool:
     """Validate date in the format Month-Year (e.g., Jan-2019)."""
     return bool(re.match(r'^[a-zA-Z]{3}-\d{4}$', date_str))
+
+def get_month(month_str):
+    try:
+        return datetime.strptime(month_str, '%b').month - 1
+    except ValueError:
+        return None
+    
+def to_camel_case(text):
+    words = text.split(' ')
+    return words[0].lower() + ''.join(word.capitalize() for word in words[1:])
