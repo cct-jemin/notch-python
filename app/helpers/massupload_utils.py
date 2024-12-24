@@ -71,7 +71,10 @@ async def sheetWiseValidation(requestParam):
     if validation_obj :
         return {"isAllSheetValid":False,"validationObj": validation_obj}
     else :
-        # print(f"""{sheetWiseData['sheets']}""")
+        if requestParam['isBenchmark']:
+            print(requestParam['monthYearHeader'],"aaaaaaaaaa")
+        else :
+            print(requestParam['monthYearHeader'],"-------------------")
         return {"isAllSheetValid":True,"validationObj": validation_obj}
 
 
@@ -214,7 +217,7 @@ def sync_validate(requestParam,sheetName, sheetData, sheetWiseData):
                 sheetWiseData['sheets'][sheetName]['validationStr'] += f"<li>Data should be greater or equal to your site benchmark period.</li>"
             elif benchmarkDate < monthYearDates[0]:
                 previousMonth = (monthYearDates[0] - timedelta(days=1)).strftime('%b-%Y')
-                checkExists = False
+                checkExists = True
                 if not checkExists:
                     sheetWiseData['sheets'][sheetName]['validationStr'] +=  f'<li>Please insert {previousMonth} month-year data first.</li>'
      
@@ -318,12 +321,20 @@ def sheetWiseHeaderPeriodValidation(requestParam, sectionPointer, sheetData, row
         yearMonth = '202101'
         benchmarkDate = datetime.strptime(yearMonth[:4] + '-' + yearMonth[4:] + '-01', '%Y-%m-%d')
             
-        if benchmarkDate > monthYearDates[0]:
-            validationStr += f"<li>Row - {rowIndex + 1}: Benchmark Period should be greater or equal to your site benchmark period.</li>"
+        # if benchmarkDate > monthYearDates[0]:
+        #     validationStr += f"<li>Row - {rowIndex + 1}: Benchmark Period should be greater or equal to your site benchmark period.</li>"
 
         if benchmarkDate == monthYearDates[0]:
             requestParam['isBenchmark'] = True 
             requestParam['headerPeriodArr'] =  list(set(requestParam['headerPeriodArr'] + monthYearHeader))
+            if not requestParam.get('monthYearHeader'):
+                requestParam['monthYearHeader'] = {}
+                
+            if sectionPointer not in requestParam['monthYearHeader']:
+                requestParam['monthYearHeader'][sectionPointer] = []
+                
+            requestParam['monthYearHeader'][sectionPointer] = periodHeaderArr
+            
         else :
             requestParam['isBenchmark'] = False 
              # Match headers with global monthYearHeader
