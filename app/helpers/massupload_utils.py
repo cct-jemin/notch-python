@@ -14,39 +14,8 @@ from collections import Counter
 import copy
 
 
-labelIgnore = ['category','custom']
-sectionVal = {
-    "section_1": "Company Information",
-    "section_2": "Employee Commuting",
-    "section_3": "Business Travel",
-    "section_4": "Energy",
-    "section_5": "Fuels",
-    "section_6": "Detailed Carbon",
-}
-monthArr = ['January','February','March','April','May','June','July','August','September','October','November','December']
-monthYearHeader = []
-carElectricLabel = "car - electric",
-CAR_ELECTRIC_OBJECT = {
-      "kwh": {
-          "fuelType": "electricity",
-          "fuelSubType": "grid",
-          "unit":"kwh",
-      },
-      "kwh - green (grid)": {
-          "fuelType": "greenElectricity",
-          "fuelSubType": "grid",
-          "unit":"kwh - Green (Grid)",
-      },
-      "kwh - green (generated)": {
-          "fuelType": "greenElectricity",
-          "fuelSubType": "nonGrid",
-          "unit":"kwh - Green (Generated)",
-      }
-},
-PURCHASE_ENERGY_LABEL = "purchasedEnergy",
-GENERATED_ENERGY_LABEL = 'generatedElectricity',
-CAR_ELECTRIC_GENERATED_ELECTRICITY_UNIT  = 'kwh - green (generated)'
 
+monthYearHeader = []
 executor = ThreadPoolExecutor()
 
 async def sheetWiseValidation(requestParam):
@@ -95,8 +64,6 @@ async def sheetWiseValidation(requestParam):
         return {"isAllSheetValid":False,"validationObj": validation_obj}
     else :
         if requestParam['isBenchmark']:
-            # print(sheetWiseData,"aaaaaaaaaa")
-            # print(list(requestParam['monthYearHeader'].keys()))
             sectionHeader = list(requestParam['monthYearHeader'].keys())
             saveSheetWiseCarbonData(requestParam, sheetWiseData, requestParam['monthYearHeader'][sectionHeader[0]])
         else :
@@ -176,7 +143,7 @@ def sync_validate(requestParam,sheetName, sheetData, sheetWiseData):
             # requestParam['sectionPointer'] = sectionNameMapping[section_pointer_name]
             requestParam['sectionPointer'] = section_pointer
 
-        elif row[0] and section_pointer_name != 'company information' and row[0].lower() not in labelIgnore:
+        elif row[0] and section_pointer_name != 'company information' and row[0].lower() not in massupload_config.labelIgnore:
             sheetWiseData['sheets'][sheetName]['validationStr'] += (
                 f"<li>Row - {i+1} : Invalid Section name. It should be one of these {', '.join(valid_section_name_array)}.</li>"
             )
@@ -232,7 +199,7 @@ def sync_validate(requestParam,sheetName, sheetData, sheetWiseData):
         sectionWiseSheetData[section_pointer].append(sheetData[i])
             
     sheetWiseData['sheets'][sheetName]['data'] = sectionWiseSheetData;   
-    if not requestParam['isBenchmark']:
+    if 'isBenchmark' in requestParam and not requestParam['isBenchmark']:
         if len(requestParam['monthYearHeader']) == 12:
             monthYearDates = sorted(
                 datetime.strptime(value + '-01', '%b-%Y-%d') for value in requestParam['monthYearHeader']
@@ -263,7 +230,7 @@ def sheetWiseHeaderValidation(request_param,section_pointer, headers, sheetData,
     # Validate column length
     if len(sheetData[i]) != request_param['maxAllowedColumnNumber']:
         validation_str += (
-            f"<li>Row - {i + 1}: Section ({sectionVal[section_pointer]}) Header Not valid </li>"
+            f"<li>Row - {i + 1}: Section ({massupload_config.sectionVal[section_pointer]}) Header Not valid </li>"
         )
 
     # Slice header based on section
@@ -285,7 +252,7 @@ def sheetWiseHeaderValidation(request_param,section_pointer, headers, sheetData,
     if diff_header:
         diff_header = [header.capitalize() for header in diff_header]
         validation_str += (
-            f"<li>Row - {i + 1}: Section ({sectionVal[section_pointer]}) ["
+            f"<li>Row - {i + 1}: Section ({massupload_config.sectionVal[section_pointer]}) ["
             + ", ".join(diff_header)
             + "] Header Not found </li>"
         )
@@ -419,7 +386,7 @@ def sheetWiseSectionPropertiesValidation(requestParam, sectionPointer, sheetData
             # Validate if companyInfoField matches any valid label
             if companyInfoFieldStr not in sectionLabel:
                 validationStr += (
-                    f"<li>Row - {rowIndex + 1}: ({sectionVal[sectionPointer]}) "
+                    f"<li>Row - {rowIndex + 1}: ({massupload_config.sectionVal[sectionPointer]}) "
                     f"{companyInfoField.strip()} value not match with {', '.join(sectionLabel)}.</li>"
                 )
 
@@ -427,12 +394,12 @@ def sheetWiseSectionPropertiesValidation(requestParam, sectionPointer, sheetData
             if companyInfoFieldStr.startswith('custom'):
                 if not companyInfoCustomField:
                     validationStr += (
-                        f"<li>Row - {rowIndex + 1}: ({sectionVal[sectionPointer]}) "
+                        f"<li>Row - {rowIndex + 1}: ({massupload_config.sectionVal[sectionPointer]}) "
                         f"custom type must be required for {companyInfoField}.</li>"
                     )
             elif companyInfoCustomField:
                 validationStr += (
-                    f"<li>Row - {rowIndex + 1}: ({sectionVal[sectionPointer]}) "
+                    f"<li>Row - {rowIndex + 1}: ({massupload_config.sectionVal[sectionPointer]}) "
                     f"custom type should be blank for {companyInfoField}.</li>"
                 )
     elif sectionPointer == 'section_2' or sectionPointer == 'section_3' :
@@ -818,13 +785,9 @@ def fieldTypeValidation(params,rowIndex):
 
     return validationStr
 def saveSheetWiseCarbonData(request_param, sheet_wise_data, month_year_header=[]):
+    # print(sheet_wise_data,"sheet_wise_data")
     final_obj = {}
-    delete_custom = {
-        'custom_1': True,
-        'custom_2': True,
-        'custom_3': True
-    }
-    
+    delete_custom = {'custom_1': True, 'custom_2': True, 'custom_3': True}
     benchmark_period = [
         '202101', '202102', '202103', '202104', '202105', '202106',
         '202107', '202108', '202109', '202110', '202111', '202112'
@@ -852,7 +815,7 @@ def saveSheetWiseCarbonData(request_param, sheet_wise_data, month_year_header=[]
             request_param['isBenchmark'] = True
         
         if month_no is not None:
-            final_obj['monthName'] = monthArr[month_no]
+            final_obj['monthName'] = massupload_config.monthArr[month_no]
             final_obj['month'] = month_no + 1
             month = f"{final_obj['month']:02d}"  # Zero-padded month (e.g., 01 for Jan)
             final_obj['year'] = int(request_param['monthYearHeader'][yearcnt].split('-')[1])
@@ -872,7 +835,7 @@ def saveSheetWiseCarbonData(request_param, sheet_wise_data, month_year_header=[]
                 section_wise_data[pointer] = sheet_data['data'][pointer]
                 category = sheet_data['category']
                 scope = sheet_data['scope']
-
+                scope = int(scope) if scope and str(scope).isdigit() else None
                 # Section 1 (Company Info)
                 if 'section_1' in section_wise_data:
                     for s_cnt1 in range(1, len(section_wise_data['section_1'])):
@@ -965,8 +928,8 @@ def saveSheetWiseCarbonData(request_param, sheet_wise_data, month_year_header=[]
                             'modifiedDate': datetime.now()
                         }
 
-                        if type_.strip().lower() == carElectricLabel:
-                            electric_data = CAR_ELECTRIC_OBJECT.get(unit, {})
+                        if type_.strip().lower() == massupload_config.carElectricLabel:
+                            electric_data = massupload_config.CAR_ELECTRIC_OBJECT.get(unit, {})
                             if electric_data:
                                 inner_object.update({
                                     'fuelType': electric_data.get('fuelType'),
@@ -978,7 +941,7 @@ def saveSheetWiseCarbonData(request_param, sheet_wise_data, month_year_header=[]
                             section_two[car_type].append(inner_object)
 
                     if section_wise_data['section_2'] and section_two:
-                        section_two['is_benchmark'] = request_param.get('isBenchmark', False)
+                        section_two['isBenchmark'] = request_param.get('isBenchmark', False)
                         
                 # Business Travel 
                 if 'section_3' in section_wise_data:
@@ -1030,14 +993,14 @@ def saveSheetWiseCarbonData(request_param, sheet_wise_data, month_year_header=[]
                             'modifiedDate': datetime.now()
                         }
                         
-                        if type_.strip().lower() == carElectricLabel:
+                        if type_.strip().lower() == massupload_config.carElectricLabel:
                             if scope == 1 :
-                                inner_object.update({'scope':2,'attributeCategory' : PURCHASE_ENERGY_LABEL})
-                                if unit == CAR_ELECTRIC_GENERATED_ELECTRICITY_UNIT :
-                                    inner_object.update({'attributeCategory' : GENERATED_ENERGY_LABEL})
+                                inner_object.update({'scope':2,'attributeCategory' : massupload_config.PURCHASE_ENERGY_LABEL})
+                                if unit == massupload_config.CAR_ELECTRIC_GENERATED_ELECTRICITY_UNIT :
+                                    inner_object.update({'attributeCategory' : massupload_config.GENERATED_ENERGY_LABEL})
                                    
                             
-                            electric_data = CAR_ELECTRIC_OBJECT.get(unit, {})
+                            electric_data = massupload_config.CAR_ELECTRIC_OBJECT.get(unit, {})
                             if electric_data:
                                 inner_object.update({
                                     'fuelType': electric_data.get('fuelType'),
@@ -1049,7 +1012,7 @@ def saveSheetWiseCarbonData(request_param, sheet_wise_data, month_year_header=[]
                             section_three[car_type].append(inner_object)
                             
                     if section_wise_data['section_3'] and section_three:
-                        section_three['is_benchmark'] = request_param.get('isBenchmark', False)
+                        section_three['isBenchmark'] = request_param.get('isBenchmark', False)
                         
                 if 'section_4' in section_wise_data:
                     for s_cnt1 in range(2, len(section_wise_data['section_4'])):
@@ -1091,7 +1054,7 @@ def saveSheetWiseCarbonData(request_param, sheet_wise_data, month_year_header=[]
                         }
                         section_four.setdefault(car_type, []).append(inner_object)
                     if section_wise_data['section_4'] and section_four:
-                        section_four['is_benchmark'] = request_param.get('isBenchmark', False)
+                        section_four['isBenchmark'] = request_param.get('isBenchmark', False)
                         
                 if 'section_5' in section_wise_data:
                     for s_cnt1 in range(2, len(section_wise_data['section_5'])):
@@ -1150,7 +1113,7 @@ def saveSheetWiseCarbonData(request_param, sheet_wise_data, month_year_header=[]
                         
                         section_four[car_type].append(inner_object)
                     if len(section_wise_data['section_5']) > 0 and section_four:
-                        section_four['is_benchmark'] = request_param.get('isBenchmark', False)
+                        section_four['isBenchmark'] = request_param.get('isBenchmark', False)
                         
                 if 'section_6' in section_wise_data:
                     for s_cnt1 in range(2, len(section_wise_data['section_6'])):
@@ -1215,7 +1178,7 @@ def saveSheetWiseCarbonData(request_param, sheet_wise_data, month_year_header=[]
                             
                             section_five[type_field].append(inner_object)
                     if len(section_wise_data['section_6']) > 0 and len(section_five) > 0:
-                        section_five['is_benchmark'] = request_param.get('isBenchmark', False)
+                        section_five['isBenchmark'] = request_param.get('isBenchmark', False)
             
 
         final_obj['uploadType'] = 'category'
@@ -1233,7 +1196,7 @@ def saveSheetWiseCarbonData(request_param, sheet_wise_data, month_year_header=[]
         # print(direct_carbon,"111111111")
         if direct_carbon is not None:
             if 'detailedCarbon' not in final_obj:
-                final_obj['detailedCarbon'] = {'is_benchmark': request_param['isBenchmark']}
+                final_obj['detailedCarbon'] = {'isBenchmark': request_param['isBenchmark']}
                 final_obj['carbonDirectCarbon'] = direct_carbon
             else:
                 final_obj['carbonDirectCarbon'] = direct_carbon
@@ -1245,6 +1208,7 @@ def saveSheetWiseCarbonData(request_param, sheet_wise_data, month_year_header=[]
                     final_obj['customTypeExists'] = False
                     break
             
+    # print(final_obj,"1111")
     return final_obj
     
 def lower_case(value: str) -> str:
