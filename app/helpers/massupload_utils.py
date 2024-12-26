@@ -16,7 +16,7 @@ import copy
 
 
 monthYearHeader = []
-executor = ThreadPoolExecutor()
+executor = ThreadPoolExecutor(max_workers=10)
 
 async def sheetWiseValidation(requestParam):
     filePath = requestParam['filePath']
@@ -26,6 +26,7 @@ async def sheetWiseValidation(requestParam):
     start_time = datetime.now()
     print(f"Start Time: {start_time.isoformat()}")
     tasks = []
+    loop = asyncio.get_running_loop()
     for sheetName in sheetNamesAarry:
         
         if sheetName.lower() not in massupload_validation_schema.massUploadValidationSchema["sheetMapping"] :
@@ -34,11 +35,13 @@ async def sheetWiseValidation(requestParam):
         sheet = workbook[sheetName]
         sheetData = [[cell.value if cell.value is not None else '' for cell in row] for row in sheet.iter_rows()]
         # print(sheetData,"---")
-        # tasks.append(validate_sheet(requestParam,sheetName, sheetData,sheetWiseData))
-        sync_validate(requestParam,sheetName, sheetData,sheetWiseData)
+        tasks.append(loop.run_in_executor(
+            executor, sync_validate, requestParam, sheetName, sheetData, sheetWiseData
+        ))
+        # sync_validate(requestParam,sheetName, sheetData,sheetWiseData)
         
     # Execute all tasks concurrently
-    await asyncio.gather(*tasks)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
     end_time = datetime.now()
     duration = (end_time - start_time).total_seconds()
     print(f"End Time: {end_time.isoformat()}")
