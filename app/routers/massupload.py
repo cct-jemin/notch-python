@@ -29,10 +29,11 @@ async def sheet_wise_mass_upload(file: UploadFile = File(...),org_id: str = Form
     uploadpath = massupload_config.FILE_UPLOAD_PATH
     if not os.path.exists(uploadpath):
         os.makedirs(uploadpath)
-        
+    
+    filePath = os.path.join(uploadpath, file.filename)    
     requestParam = {}
     requestParam.update({
-        'filePath':os.path.join(uploadpath, file.filename), 
+        'filePath':filePath, 
         'org_id': org_id,
         'site_id': site_id,
         'admin_email':'',
@@ -42,7 +43,9 @@ async def sheet_wise_mass_upload(file: UploadFile = File(...),org_id: str = Form
         buffer.write(await file.read())  
         
     response = await massupload_utils.sheetWiseValidation(requestParam)
-    
+    if os.path.exists(filePath):
+        os.remove(filePath)
+        print("File has been deleted")
     # print(f"Finished task:{time.time():.2f}, duration: {time.time() - start_time:.2f} seconds")
     if response['isAllSheetValid'] :
         return {"message":"file uploaded successfully","validationObj":response['validationObj']}
