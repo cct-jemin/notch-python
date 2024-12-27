@@ -139,10 +139,7 @@ def sync_validate(requestParam,sheetName, sheetData, sheetWiseData):
             if section_pointer_name in valid_section_name_array:
                 requestParam['sectionPointer'] = sectionNameMapping[section_pointer_name]
                 section_pointer = sectionNameMapping[section_pointer_name]
-            else :
-                sheetWiseData['sheets'][sheetName]['validationStr'] += (
-                    f"<li>Row - {i+1} : Invalid Section name. It should be one of these {', '.join(valid_section_name_array)}.</li>"
-                ) 
+           
             
         # Filter out rows where all cells are null
         if all(cell is None or cell == '' for cell in row):
