@@ -156,7 +156,6 @@ def sync_validate(requestParam,sheetName, sheetData, sheetWiseData):
             section_pointer_name = row[0].lower()
             section_pointer = sectionNameMapping[section_pointer_name]
             sheetWiseData['sheets'][sheetName]['sectionPointer'] = section_pointer
-            # requestParam['sectionPointer'] = sectionNameMapping[section_pointer_name]
             requestParam['sectionPointer'] = section_pointer
 
         elif row[0] and section_pointer_name != 'company information' and row[0].lower() not in massupload_config.labelIgnore:
@@ -170,8 +169,6 @@ def sync_validate(requestParam,sheetName, sheetData, sheetWiseData):
             attributeCategoryFields = v2ScopeCategoryConfig.scopeConfig[scope][category]
             attributeSubCategoryFields = get_attribute_subcategories(v2ScopeCategoryConfig.scopeConfig)
             requestParam['attributeCategoryFields'] = attributeCategoryFields
-            # print(lower_case(sheetData[i][0]),"aaa")
-            # print(section_pointer_name,"section_pointer_name")
             if row[0] and str(row[0]).strip().lower() == "category":
                 # Check if the attributeCategoryFields label matches the category in sheet_data
                 if attributeCategoryFields and str(attributeCategoryFields['label']).strip().lower() != sheetData[0][1].strip().lower():
@@ -182,32 +179,20 @@ def sync_validate(requestParam,sheetName, sheetData, sheetWiseData):
                     sheetWiseData['sheets'][sheetName]['validationStr'] =  f"<li>Row - {i + 1} : Custom project sub-category name should not be same as standard sub-category {sheetData[i][1]}.</li>"
                     break
                 else :
-                    sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseSectionPropertiesValidation(requestParam, section_pointer, sheetData, i)
-                    sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseValueValidation(requestParam, sheetData, i, headerRow)
+                    validate_properties_and_values(sheetWiseData, sheetName, requestParam, section_pointer, sheetData, i, headerRow)
                 
             elif  lower_case(sheetData[i][0]) == section_pointer_name :
-                headers = massupload_validation_schema.massUploadValidationSchema['headerMapping'][section_pointer]
-                if headers:
-                    headerRow = sheetData[i]
-                    sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseHeaderValidation(requestParam,section_pointer, headers, sheetData, i)
-                    sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseHeaderPeriodValidation(requestParam, section_pointer, sheetData, i)
-               
+                headerRow = validate_headers(sheetData, i, section_pointer, sheetWiseData, sheetName, requestParam)
+                
             else :
                 #Property and value validation
-                sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseSectionPropertiesValidation(requestParam, section_pointer, sheetData, i)
-                sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseValueValidation(requestParam, sheetData, i,headerRow)
+                validate_properties_and_values(sheetWiseData, sheetName, requestParam, section_pointer, sheetData, i, headerRow)
         
         elif  lower_case(sheetData[i][0]) == section_pointer_name :
-                headers = massupload_validation_schema.massUploadValidationSchema['headerMapping'][section_pointer]
-                if headers:
-                    headerRow = sheetData[i]
-                    #Header validation
-                    sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseHeaderValidation(requestParam,section_pointer, headers, sheetData, i)
-                    sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseHeaderPeriodValidation(requestParam, section_pointer, sheetData, i)
+                headerRow = validate_headers(sheetData, i, section_pointer, sheetWiseData, sheetName, requestParam)
         else :
             #Property and value validation
-            sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseSectionPropertiesValidation(requestParam, section_pointer, sheetData, i)
-            sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseValueValidation(requestParam, sheetData, i,headerRow)
+            validate_properties_and_values(sheetWiseData, sheetName, requestParam, section_pointer, sheetData, i, headerRow)
         
         if section_pointer not in sectionWiseSheetData:
             sectionWiseSheetData[section_pointer] = []
@@ -243,6 +228,20 @@ def sync_validate(requestParam,sheetName, sheetData, sheetWiseData):
 
     # sheetWiseData['sheets'][sheetName]['data'] = sheetData
     # print(f"Finished processing sheet: {sheetName} at {time.time():.2f}, duration: {time.time() - start_time:.2f} seconds")
+    
+def validate_headers(sheetData, i, section_pointer, sheetWiseData, sheetName, requestParam):
+    headers = massupload_validation_schema.massUploadValidationSchema['headerMapping'][section_pointer]
+    if headers:
+        headerRow = sheetData[i]
+        sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseHeaderValidation(requestParam, section_pointer, headers, sheetData, i)
+        sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseHeaderPeriodValidation(requestParam, section_pointer, sheetData, i)
+    return headerRow
+
+def validate_properties_and_values(sheetWiseData, sheetName, requestParam, section_pointer, sheetData, i, headerRow):
+    sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseSectionPropertiesValidation(requestParam, section_pointer, sheetData, i)
+    sheetWiseData['sheets'][sheetName]['validationStr'] += sheetWiseValueValidation(requestParam, sheetData, i, headerRow)
+
+
     
 def sheetWiseHeaderValidation(request_param,section_pointer, headers, sheetData, i):
     validation_str = ""
