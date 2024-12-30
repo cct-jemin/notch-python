@@ -6,6 +6,7 @@ from app.helpers import massupload_utils
 import time
 from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime,timedelta
 
 
 router = APIRouter()
@@ -15,6 +16,8 @@ async def sheet_wise_mass_upload(file: UploadFile = File(...),org_id: str = Form
     # start_time = time.time()
     # print(f"Task start time {start_time:.2f}")
     # validate upload file extension
+    start_time = datetime.now()
+    print(f"Start Time: {start_time.isoformat()}")
     if not any(file.filename.endswith(ext) for ext in massupload_config.EXTENSION):
         message = "Unsupported file type.upload only xlsx file"
         logging.error(message)
@@ -46,6 +49,12 @@ async def sheet_wise_mass_upload(file: UploadFile = File(...),org_id: str = Form
     if os.path.exists(filePath):
         os.remove(filePath)
         print("File has been deleted")
+        
+    end_time = datetime.now()
+    duration = (end_time - start_time).total_seconds()
+    print(f"End Time: {end_time.isoformat()}")
+    print(f"Duration: {duration:.2f} seconds")
+    
     # print(f"Finished task:{time.time():.2f}, duration: {time.time() - start_time:.2f} seconds")
     if response['isAllSheetValid'] :
         return {"message":"file uploaded successfully","validationObj":response['validationObj']}

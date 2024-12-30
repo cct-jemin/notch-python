@@ -25,8 +25,8 @@ async def sheetWiseValidation(requestParam):
     workbook = load_workbook(filePath, read_only=True)
     sheetNamesAarry = workbook.sheetnames
     sheetWiseData = {'sheets' : {}, 'validationStr' : ''}
-    start_time = datetime.now()
-    print(f"Start Time: {start_time.isoformat()}")
+    # start_time = datetime.now()
+    # print(f"Start Time: {start_time.isoformat()}")
     tasks = []
     loop = asyncio.get_running_loop()
     for sheetName in sheetNamesAarry:
@@ -44,10 +44,10 @@ async def sheetWiseValidation(requestParam):
         
     # Execute all tasks concurrently
     results = await asyncio.gather(*tasks, return_exceptions=True)
-    end_time = datetime.now()
-    duration = (end_time - start_time).total_seconds()
-    print(f"End Time: {end_time.isoformat()}")
-    print(f"Duration: {duration:.2f} seconds")
+    # end_time = datetime.now()
+    # duration = (end_time - start_time).total_seconds()
+    # print(f"End Time: {end_time.isoformat()}")
+    # print(f"Duration: {duration:.2f} seconds")
         
     validation_obj = []
     isAllSheetValid = False
@@ -172,9 +172,9 @@ def sync_validate(requestParam,sheetName, sheetData, sheetWiseData):
             requestParam['attributeCategoryFields'] = attributeCategoryFields
             # print(lower_case(sheetData[i][0]),"aaa")
             # print(section_pointer_name,"section_pointer_name")
-            if row[0] and row[0].strip().lower() == "category":
+            if row[0] and str(row[0]).strip().lower() == "category":
                 # Check if the attributeCategoryFields label matches the category in sheet_data
-                if attributeCategoryFields and attributeCategoryFields['label'].strip().lower() != sheetData[0][1].strip().lower():
+                if attributeCategoryFields and str(attributeCategoryFields['label']).strip().lower() != sheetData[0][1].strip().lower():
                     sheetWiseData['sheets'][sheetName]['validationStr'] += f"<li>Row - {i + 1} : Invalid Category name {sheetData[0][1]}. It should be {attributeCategoryFields['label']}.</li>"
                     break
             elif  lower_case(sheetData[i][0]) == 'custom' or lower_case(sheetData[i][2]) == 'custom' :
@@ -227,7 +227,11 @@ def sync_validate(requestParam,sheetName, sheetData, sheetWiseData):
                 sheetWiseData['sheets'][sheetName]['validationStr'] += f"<li>Data should be greater or equal to your site benchmark period.</li>"
             elif benchmarkDate < monthYearDates[0]:
                 previousMonth = (monthYearDates[0] - timedelta(days=1)).strftime('%b-%Y')
-                checkExists = True
+                checkQuery = {
+                    'site_id': requestParam['site_id'],
+                    'yearMonth': yearMonth
+                }
+                checkExists = v2_carbon_data.find_one(checkQuery)
                 if not checkExists:
                     sheetWiseData['sheets'][sheetName]['validationStr'] +=  f'<li>Please insert {previousMonth} month-year data first.</li>'
      
@@ -337,6 +341,7 @@ def sheetWiseHeaderPeriodValidation(requestParam, sectionPointer, sheetData, row
         if benchmarkDate == monthYearDates[0]:
             requestParam['isBenchmark'] = True 
             requestParam['headerPeriodArr'] =  list(set(requestParam['headerPeriodArr'] + monthYearHeader))
+            validationStr += sequential_month_data_check(monthYearHeader)
             if not requestParam.get('monthYearHeader'):
                 requestParam['monthYearHeader'] = {}
                 
@@ -459,7 +464,7 @@ def sheetWiseSectionPropertiesValidation(requestParam, sectionPointer, sheetData
             'meterName' : sheetData[rowIndex][7],
             'meterNumber' : sheetData[rowIndex][8]
         }
-        if SheetDataObj['attributeSubCategory'].strip().lower() not in energyFields:
+        if str(SheetDataObj['attributeSubCategory']).strip().lower() not in energyFields:
             validationStr += (
                 f"<li>Row - {rowIndex + 1}: Invalid Sub-Category ({SheetDataObj['attributeSubCategory']}) "
                 f"It should be one of these {energyFields}.</li>"
@@ -498,7 +503,7 @@ def sheetWiseSectionPropertiesValidation(requestParam, sectionPointer, sheetData
             'carbonFactor' : sheetData[rowIndex][8],
         }
         fuelsFields  = ['fuels', 'fugitive emissions']
-        if SheetDataObj['attributeSubCategory'].strip().lower() not in fuelsFields:
+        if str(SheetDataObj['attributeSubCategory']).strip().lower() not in fuelsFields:
             validationStr += (
                 f"<li>Row - {rowIndex + 1}: Invalid Sub-Category ({SheetDataObj['attributeSubCategory']}) "
                 f"It should be one of these {fuelsFields}.</li>"
@@ -524,7 +529,7 @@ def sheetWiseSectionPropertiesValidation(requestParam, sectionPointer, sheetData
         }
         if isinstance(SheetDataObj['type'], str) and SheetDataObj['type'].strip().lower() == 'custom' or SheetDataObj['attributeType'].strip().lower() == 'custom' :
             isTypeRequired = True
-            if SheetDataObj['attributeType'].strip().lower() == 'custom' and (not SheetDataObj.get('subType') or SheetDataObj['subType'] is None):
+            if str(SheetDataObj['attributeType']).strip().lower() == 'custom' and (not SheetDataObj.get('subType') or SheetDataObj['subType'] is None):
                 isTypeRequired = False
                 
             params = [
@@ -599,7 +604,7 @@ def validateFields(request_param, sheet_data_obj, sheet_data, row_index):
     if section_fields != "userdefine":
         # workplace validation
         if request_param["sectionPointer"] in ["section_4", "section_5"]:
-            workplaceSheet = sheet_data_obj['workplace'].strip().lower()
+            workplaceSheet = str(sheet_data_obj['workplace']).strip().lower()
             if workplaceSheet not in ['home', 'office']:
                 validation_str += (
                     f"<li>Row - {row_index + 1}: Invalid workplace {sheet_data_obj['workplace']}. "
@@ -610,7 +615,7 @@ def validateFields(request_param, sheet_data_obj, sheet_data, row_index):
                     f"<li>Row - {row_index + 1}: Invalid workplace {sheet_data_obj['workplace']}. "
                     f"It should be office.</li>"
                 )
-            elif scopeValue == "2" and sheet_data_obj["attributeSubCategory"].strip().lower() in ["fuels", "fugitive emissions"] and workplaceSheet != "home":
+            elif scopeValue == "2" and str(sheet_data_obj["attributeSubCategory"]).strip().lower() in ["fuels", "fugitive emissions"] and workplaceSheet != "home":
                 validation_str += (
                     f"<li>Row - {row_index + 1}: Invalid workplace {sheet_data_obj['workplace']}. "
                     f"It should be home.</li>"
@@ -643,7 +648,7 @@ def validateFields(request_param, sheet_data_obj, sheet_data, row_index):
             fieldData = copy.deepcopy(section_field)
             attribute_sub_category_field = section_field.get("sheetLabel") or section_field.get("label")
             attribute_sub_category_labels.append(attribute_sub_category_field)
-            if attribute_sub_category_field.strip().lower() == sheet_data_obj["attributeSubCategory"].strip().lower():
+            if str(attribute_sub_category_field).strip().lower() == str(sheet_data_obj["attributeSubCategory"]).strip().lower():
                 attribute_sub_category_valid = True
                 type_labels = []
 
@@ -670,18 +675,18 @@ def validateFields(request_param, sheet_data_obj, sheet_data, row_index):
                     type_label = typeFields.get("sheetLabel") or typeFields.get("label")
                     type_labels.append(type_label)
                     options = typeFields.get("options", {})
-                    if type_label.strip().lower() == sheet_data_obj["type"].strip().lower():
+                    if str(type_label).strip().lower() == str(sheet_data_obj["type"]).strip().lower():
                         is_type_valid = True
                         units = [unit.strip().lower() for unit in typeFields.get("unit", [])]
-                        if typeFields.get("unit", []) and len(options) == 0 and sheet_data_obj["unit"].strip().lower() not in units:
+                        if typeFields.get("unit", []) and len(options) == 0 and str(sheet_data_obj["unit"]).strip().lower() not in units:
                             validation_str += (
                                 f"<li>Row - {row_index + 1}: Invalid unit {sheet_data_obj['unit']}. "
                                 f"It should be one of these: {', '.join(units)}.</li>"
                             )
                             
-                        if sheet_data_obj["attributeSubCategory"].strip().lower() == 'plane':
+                        if str(sheet_data_obj["attributeSubCategory"]).strip().lower() == 'plane':
                             attributeSubCategoryUnit = fieldData['unit']
-                            if sheet_data_obj["unit"].strip().lower() not in attributeSubCategoryUnit:
+                            if str(sheet_data_obj["unit"]).strip().lower() not in attributeSubCategoryUnit:
                                 validation_str += (
                                     f"<li>Row - {row_index + 1}: Invalid unit {sheet_data_obj['unit']}. "
                                     f"It should be one of these: {', '.join(attributeSubCategoryUnit)}.</li>"
@@ -693,7 +698,7 @@ def validateFields(request_param, sheet_data_obj, sheet_data, row_index):
                             # print( typeFields['options'],"qqqq")
                             sub_type_label = subTypeFields.get("sheetLabel") or subTypeFields.get("label")
                             subtype_labels.append(sub_type_label)
-                            if sub_type_label.strip().lower() == sheet_data_obj["subType"].strip().lower():
+                            if str(sub_type_label).strip().lower() == str(sheet_data_obj["subType"]).strip().lower():
                                 is_sub_type_valid = True
                                 # print("innnnn",subTypeFields)
                                 # Validate energy source
@@ -718,7 +723,7 @@ def validateFields(request_param, sheet_data_obj, sheet_data, row_index):
                                 else :
                                     units = [unit.strip().lower() for unit in typeFields.get("unit", [])]
                                     
-                                if sheet_data_obj["unit"].strip().lower() not in units:
+                                if str(sheet_data_obj["unit"]).strip().lower() not in units:
                                     validation_str += (
                                         f"<li>Row - {row_index + 1}: Invalid unit {sheet_data_obj['unit']}. "
                                         f"It should be one of these: {', '.join(units)}.</li>"
@@ -917,17 +922,18 @@ def saveSheetWiseCarbonData(request_param, sheet_wise_data, month_year_header=[]
 
                         # car_type = re.sub(r' - ', '', re.sub(' ', '_', type_.lower()))
                         car_type = convert_camel_case(type_.lower())
-                        travel_vehicle = re.sub(' ', '_', sub_type.lower())
+                        travel_vehicle = convert_camel_case(sub_type.lower())
                         travel_type = ""
                         
 
                         if car_type.startswith('car'):
-                            travel_vehicle = f"car_{travel_vehicle}"
+                            travel_vehicle = convert_camel_case(f"car_{travel_vehicle}")
+                            
 
                         if sub_category.lower() == 'plane':
                             car_type = sub_category.lower()
-                            travel_type = re.sub(' ', '_', type_.lower())
-                            travel_vehicle = re.sub(' ', '_', sub_type.lower())
+                            travel_type = convert_camel_case(type_)
+                            travel_vehicle = convert_camel_case(sub_type) 
 
                         if unit and unit not in [None, '']:
                             unit = unit.lower()
@@ -953,7 +959,7 @@ def saveSheetWiseCarbonData(request_param, sheet_wise_data, month_year_header=[]
                             'modifiedDate': datetime.now()
                         }
 
-                        if type_.strip().lower() == massupload_config.carElectricLabel:
+                        if str(type_).strip().lower() == massupload_config.carElectricLabel:
                             electric_data = massupload_config.CAR_ELECTRIC_OBJECT.get(unit, {})
                             if electric_data:
                                 inner_object.update({
@@ -985,14 +991,14 @@ def saveSheetWiseCarbonData(request_param, sheet_wise_data, month_year_header=[]
                         travel_type = ''
                         
                         car_type = convert_camel_case(type_.lower())
-                        travel_vehicle = re.sub(' ', '_', sub_type.lower())
+                        travel_vehicle = convert_camel_case(sub_type)
                         if car_type.startswith('car'):
-                            travel_vehicle = f"car_{travel_vehicle}"
+                            travel_vehicle = convert_camel_case(f"car_{travel_vehicle}")
 
                         if sub_category.lower() == 'plane':
                             car_type = sub_category.lower()
-                            travel_type = re.sub(' ', '_', type_.lower())
-                            travel_vehicle = re.sub(' ', '_', sub_type.lower())
+                            travel_type = convert_camel_case(type_)
+                            travel_vehicle = convert_camel_case(sub_type)
 
                         if unit and unit not in [None, '']:
                             unit = unit.lower()
@@ -1018,7 +1024,7 @@ def saveSheetWiseCarbonData(request_param, sheet_wise_data, month_year_header=[]
                             'modifiedDate': datetime.now()
                         }
                         
-                        if type_.strip().lower() == massupload_config.carElectricLabel:
+                        if str(type_).strip().lower() == massupload_config.carElectricLabel:
                             if scope == 1 :
                                 inner_object.update({'scope':2,'attributeCategory' : massupload_config.PURCHASE_ENERGY_LABEL})
                                 if unit == massupload_config.CAR_ELECTRIC_GENERATED_ELECTRICITY_UNIT :
@@ -1161,7 +1167,7 @@ def saveSheetWiseCarbonData(request_param, sheet_wise_data, month_year_header=[]
                                 section_five['custom'] = []
                             
                             custom_data = {
-                                "attributeCategory": request_param['category'],
+                                "attributeCategory": category,
                                 "attributeSubCategory": sub_category,
                                 "category": sub_category,  # subType replaced with subCategory
                                 "subType": sub_type,
@@ -1189,7 +1195,7 @@ def saveSheetWiseCarbonData(request_param, sheet_wise_data, month_year_header=[]
                                 section_five[type_field] = []
 
                             inner_object = {
-                                "attributeCategory": request_param['category'],
+                                "attributeCategory": category,
                                 "attributeSubCategory": sub_category_field,
                                 "type": type_field,
                                 "subType": to_camel_case(sub_type) if sub_type else None,
@@ -1237,16 +1243,17 @@ def saveSheetWiseCarbonData(request_param, sheet_wise_data, month_year_header=[]
                 if 'type' not in item:
                     final_obj['customTypeExists'] = False
                     break
+             
                 
         v2_carbon_data.delete_one(filterVal)    
-        
+        final_obj['createdAt'] = datetime.now()
         v2_carbon_data.insert_one(final_obj)
         
     return final_obj
     
 def lower_case(value: str) -> str:
     """Convert a string to lowercase and strip whitespace."""
-    return re.sub(r'\s+', ' ', value.strip().lower())
+    return re.sub(r'\s+', ' ', str(value).strip().lower())
 
 def reverseObject(obj):
     return {v: k for k, v in obj.items()}
@@ -1290,6 +1297,8 @@ def to_camel_case(text):
     return words[0].lower() + ''.join(word.capitalize() for word in words[1:])
 
 def convert_camel_case(text):
+    if not text:
+        return ''
     # Replace hyphens and spaces with a single space
     text = re.sub(r'[-_]', ' ', text)
     
@@ -1298,3 +1307,24 @@ def convert_camel_case(text):
     
     # Convert to camelCase
     return parts[0].lower() + ''.join(word.capitalize() for word in parts[1:])
+
+def sequential_month_data_check(arr_data):
+    validation_str = ''
+    cnt = 0
+
+    for x in range(len(arr_data) - 1):
+        current_date = datetime.strptime(arr_data[x], '%b-%Y')
+        next_date = datetime.strptime(arr_data[x + 1], '%b-%Y')
+
+        diff = (next_date.year - current_date.year) * 12 + (next_date.month - current_date.month)
+        
+        if diff > 1:
+            validation_str += (f'<li>Month and Year header should be consecutive. '
+                               f'Please insert Month - Year data between {current_date.strftime("%b-%Y")} '
+                               f'to {next_date.strftime("%b-%Y")}</li>')
+            cnt += 1
+
+    if cnt > 1:
+        validation_str = '<li>Month and Year header should be consecutive for all section headers.</li>'
+    
+    return validation_str
