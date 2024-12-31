@@ -806,7 +806,6 @@ def fieldTypeValidation(params,rowIndex):
 
     return validationStr
 def saveSheetWiseCarbonData(request_param, sheet_wise_data, month_year_header=[]):
-    final_obj = {}
     delete_custom = {'custom_1': True, 'custom_2': True, 'custom_3': True}
     benchmark_period = [
         '202101', '202102', '202103', '202104', '202105', '202106',
@@ -816,6 +815,7 @@ def saveSheetWiseCarbonData(request_param, sheet_wise_data, month_year_header=[]
     if request_param.get('isBenchmark') and len(month_year_header) == 12:
         request_param['monthYearHeader'] = month_year_header
         
+    bulk_insert_data = []
     for yearcnt in range(len(request_param['monthYearHeader'])):
         section_one = {}
         section_two = {}
@@ -830,7 +830,7 @@ def saveSheetWiseCarbonData(request_param, sheet_wise_data, month_year_header=[]
         year_month = int(request_param['monthYearHeader'][yearcnt].split('-')[1])
         year_month = f'{year_month}{month_no}'
         direct_carbon = None
-        final_obj['_id'] = ObjectId()
+        final_obj = {'_id':ObjectId()}
         
         if year_month in benchmark_period:
             request_param['isBenchmark'] = True
@@ -848,6 +848,7 @@ def saveSheetWiseCarbonData(request_param, sheet_wise_data, month_year_header=[]
             'org_id': request_param['org_id'],
             'yearMonth': final_obj['yearMonth']
         }
+        carbonData = v2_carbon_data.find_one(filterVal)
         
         for sheet_name, sheet_data in sheet_wise_data['sheets'].items():
             category_row = ''
@@ -1211,7 +1212,29 @@ def saveSheetWiseCarbonData(request_param, sheet_wise_data, month_year_header=[]
                     if len(section_wise_data['section_6']) > 0 and len(section_five) > 0:
                         section_five['isBenchmark'] = request_param.get('isBenchmark', False)
             
-
+        if carbonData and carbonData.get('dataSource') == 'systemLink':
+            final_obj['dataSource'] = 'systemLink'
+    
+            section_four['electricity'] = [
+                e for e in section_four['electricity']
+                if e.get('workPlace') == 'home'
+            ]
+        
+            section_four['gas'] = [
+                e for e in section_four['gas']
+                if e.get('workPlace') == 'home'
+            ]
+    
+            if 'energyFuels' in carbonData:
+                if 'electricity' in carbonData['energyFuels']:
+                    section_four['electricity'].extend(carbonData['energyFuels']['electricity'])
+            
+                if 'gas' in carbonData['energyFuels']:
+                    section_four['gas'].extend(carbonData['energyFuels']['gas'])
+        else:
+            if final_obj.get('dataSource') == 'systemLink':
+                final_obj.pop('dataSource', None)
+        
         final_obj['org_id'] = request_param['org_id']
         final_obj['site_id'] = request_param['site_id']
         final_obj['admin_email'] = request_param['admin_email']
@@ -1242,12 +1265,16 @@ def saveSheetWiseCarbonData(request_param, sheet_wise_data, month_year_header=[]
                 if 'type' not in item:
                     final_obj['customTypeExists'] = False
                     break
-             
-                
-        v2_carbon_data.delete_one(filterVal)    
-        final_obj['createdAt'] = datetime.now()
-        v2_carbon_data.insert_one(final_obj)
+      
+        if 'carbonOffset' in carbonData:
+            final_obj['carbonOffset'] =  carbonData['carbonOffset']
         
+             
+        final_obj['createdAt'] = datetime.now()        
+        v2_carbon_data.delete_one(filterVal)    
+        bulk_insert_data.append(final_obj)
+ 
+    v2_carbon_data.insert_many(bulk_insert_data,ordered=False)
     return final_obj
     
 def lower_case(value: str) -> str:
